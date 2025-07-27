@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rural Planner Test</title>
+  </head>
+  <body>
+    <h2>🧪 자연어 → 일정 테스트</h2>
+    <textarea id="input" rows="3" cols="60">
+7월 한 달 전북 고창에서 조개잡이 체험과 사찰 관광 하고 싶어
+</textarea
+    ><br />
+    <button onclick="run()">Generate</button>
+
+    <pre id="out"></pre>
+
+    <script>
+      async function run() {
+        const query = document.getElementById("input").value;
+        let res = await fetch("/slots", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        const slots = await res.json();
+
+        res = await fetch("/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...slots, email: "tester@ex.com" }),
+        });
+        const recs = await res.json();
+
+        // pick first two items for demo
+        const selections = recs.slice(0, 2);
+        res = await fetch("/itinerary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ selections, slots, budget: 200000 }),
+        });
+        const itinerary = await res.json();
+        document.getElementById("out").textContent = JSON.stringify(
+          { slots, recs, itinerary },
+          null,
+          2
+        );
+      }
+    </script>
+  </body>
+</html>

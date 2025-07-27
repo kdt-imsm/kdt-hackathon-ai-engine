@@ -1,0 +1,59 @@
+# ---- Python & FastAPI -------------------------------------------------
+# 가상환경
+.venv/
+venv/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Unit test / type check caches
+.pytest_cache/
+.mypy_cache/
+
+# Coverage reports
+htmlcov/
+.coverage
+coverage.xml
+
+# ---- 환경 · 설정 ------------------------------------------------------
+.env
+.env.*
+*.secret
+
+# IDE / Editor
+.vscode/
+.idea/
+*.iml
+
+# ---- OS 별 임시 파일 ---------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---- 노코드 / 프런트엔드(옵션) ----------------------------------------
+node_modules/
+public/build/
+*.log
+
+# ---- 데이터 ------------------------------------------------------------
+# 원본 대용량·민감 데이터는 data/raw/ 내부에 두고 무시
+data/raw/
+*.bak
+
+# ---- 기타 --------------------------------------------------------------
+# 이미 Git에 올라간 파일을 무시 패턴에 추가한 뒤 무시하려면
+# git rm --cached -r .venv __pycache__ ...
