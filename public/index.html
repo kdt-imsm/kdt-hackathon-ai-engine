@@ -1,46 +1,202 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
   <head>
-    <meta charset="utf-8" />
-    <title>Rural Planner Test</title>
+    <meta charset="UTF-8" />
+    <title>농촌 일·관광 추천 테스트</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 20px;
+      }
+      .cards {
+        display: flex;
+        overflow-x: auto;
+        gap: 8px;
+        margin: 8px 0;
+      }
+      .card {
+        min-width: 200px;
+        padding: 12px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .card img {
+        width: 100%;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        transition: opacity 0.3s ease;
+      }
+      .card .no-image {
+        width: 100%;
+        height: 120px;
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        color: #666;
+        font-size: 12px;
+      }
+      .card .loading-image {
+        width: 100%;
+        height: 120px;
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        color: #888;
+        font-size: 12px;
+      }
+      @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      .loading-text {
+        color: #007bff;
+        font-style: italic;
+        margin-top: 8px;
+      }
+      .card.selected {
+        border-color: #007bff;
+        background: #e7f1ff;
+      }
+      #itinerary {
+        white-space: pre-wrap;
+        background: #f9f9f9;
+        padding: 12px;
+        border: 1px solid #ddd;
+        margin-top: 8px;
+      }
+    </style>
   </head>
   <body>
-    <h2>🧪 자연어 → 일정 테스트</h2>
-    <textarea id="input" rows="3" cols="60">
-7월 한 달 전북 고창에서 조개잡이 체험과 사찰 관광 하고 싶어
-</textarea
-    ><br />
-    <button onclick="run()">Generate</button>
+    <h2>1. 자연어 요청</h2>
+    <textarea
+      id="userQuery"
+      rows="2"
+      cols="60"
+      placeholder="예) 9월 첫째 주 고창에서 조개잡이 + 해변 관광하고 싶어요"
+    ></textarea>
+    <br />
+    <button onclick="loadPreviews()">슬롯 추출 & 카드 보기</button>
 
-    <pre id="out"></pre>
+    <h2>2. 일거리 카드 (최대 10개)</h2>
+    <div id="jobs" class="cards"></div>
+
+    <h2>3. 관광지 카드 (최대 10개)</h2>
+    <div id="tours" class="cards"></div>
+
+    <h2>4. 선택 후 일정 생성</h2>
+    <button onclick="generateItinerary()">최종 일정 생성</button>
+
+    <h2>생성된 일정 JSON</h2>
+    <div id="itinerary"></div>
 
     <script>
-      async function run() {
-        const query = document.getElementById("input").value;
-        let res = await fetch("/slots", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
-        });
-        const slots = await res.json();
+      let currentSlots = null;
+      let jobsPreview = [],
+        toursPreview = [];
 
-        res = await fetch("/recommend", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...slots, email: "tester@ex.com" }),
-        });
-        const recs = await res.json();
+      async function loadPreviews() {
+        const query = document.getElementById("userQuery").value;
+        
+        // 로딩 상태 표시
+        document.getElementById("jobs").innerHTML = '<div class="loading-text">일거리 카드 로딩 중...</div>';
+        document.getElementById("tours").innerHTML = '<div class="loading-text">관광지 카드 및 이미지 로딩 중...</div>';
+        
+        try {
+          const resp = await fetch("/slots", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query: query }),
+          });
+          
+          if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+          }
+          
+          const data = await resp.json();
+          currentSlots = data.slots;
+          jobsPreview = data.jobs_preview;
+          toursPreview = data.tours_preview;
+          
+          renderCards("jobs", jobsPreview, "job_id", "tags");
+          renderCards("tours", toursPreview, "content_id", "overview");
+          
+          console.log("✅ 카드 로딩 완료:", {
+            jobs: jobsPreview.length,
+            tours: toursPreview.length,
+            images: toursPreview.filter(t => t.image_url).length
+          });
+          
+        } catch (error) {
+          console.error("❌ 카드 로딩 실패:", error);
+          document.getElementById("jobs").innerHTML = '<div style="color: red;">일거리 로딩 실패</div>';
+          document.getElementById("tours").innerHTML = '<div style="color: red;">관광지 로딩 실패</div>';
+        }
+      }
 
-        // pick first two items for demo
-        const selections = recs.slice(0, 2);
-        res = await fetch("/itinerary", {
+      function renderCards(containerId, items, key, textField) {
+        const cont = document.getElementById(containerId);
+        cont.innerHTML = "";
+        items.forEach((item) => {
+          const card = document.createElement("div");
+          card.className = "card";
+          card.dataset.id = item[key];
+          // farm_name or title
+          const title = item.farm_name || item.title;
+          const region = item.region || "지역정보없음";
+          const desc = item[textField] || "";
+          
+          // 🔥 NEW: 관광지 카드인 경우 이미지 추가
+          let imageHTML = "";
+          if (containerId === "tours" && item.image_url) {
+            imageHTML = `<img src="${item.image_url}" alt="${title}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                         <div class="no-image" style="display:none;">이미지 없음</div>`;
+          } else if (containerId === "tours") {
+            imageHTML = `<div class="no-image">이미지 없음</div>`;
+          }
+          
+          card.innerHTML = `${imageHTML}<strong>${title}</strong><p><em>📍 ${region}</em></p><p>${desc}</p>`;
+          card.onclick = () => card.classList.toggle("selected");
+          cont.append(card);
+        });
+      }
+
+      async function generateItinerary() {
+        const selectedJobs = Array.from(
+          document.querySelectorAll("#jobs .card.selected")
+        ).map((el) => parseInt(el.dataset.id));
+        const selectedTours = Array.from(
+          document.querySelectorAll("#tours .card.selected")
+        ).map((el) => parseInt(el.dataset.id));
+
+        const payload = {
+          query: document.getElementById("userQuery").value,
+          user_id: null,
+          budget: 500000,
+          selected_jobs: selectedJobs,
+          selected_tours: selectedTours,
+        };
+        const resp = await fetch("/recommend", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ selections, slots, budget: 200000 }),
+          body: JSON.stringify(payload),
         });
-        const itinerary = await res.json();
-        document.getElementById("out").textContent = JSON.stringify(
-          { slots, recs, itinerary },
+
+        // 전체 응답이 ScheduleItem 배열로 돌아옵니다.
+        const data = await resp.json();
+        // 이걸 그대로 출력
+        document.getElementById("itinerary").textContent = JSON.stringify(
+          data,
           null,
           2
         );
