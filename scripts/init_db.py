@@ -52,7 +52,7 @@ from app.embeddings.embedding_service import embed_texts
 # 상수: 더미 CSV 파일 경로 (일거리 데이터)
 # --------------------------------------------------------------------------- #
 CSV_JOBS = Path("data/dummy_jobs.csv")
-CSV_TOURS = Path("data/tour_api.csv")
+CSV_TOURS = Path("data/tour_api_with_keywords.csv")  # 키워드가 포함된 전체 데이터 사용
 
 
 def upsert_from_df(df: pd.DataFrame, model, db: Session):
@@ -158,7 +158,35 @@ if __name__ == "__main__":
     # --------------------- 5) TourSpot 임베딩 갱신 -------------------------- #
     print("▶ 관광지 embedding 갱신 중...")
     tour_rows = db.query(models.TourSpot).all()
-    refresh_embeddings(db, tour_rows, attr_name="name")
+    
+    # 벡터가 없는 관광지만 필터링
+    tours_needing_embedding = []
+    texts_for_embedding = []
+    
+    for tour in tour_rows:
+        if tour.pref_vector is None:
+            tours_needing_embedding.append(tour)
+            
+            # keywords 컬럼이 있으면 활용, 없으면 name + tags 사용
+            if hasattr(tour, 'keywords') and tour.keywords and tour.keywords.strip():
+                text_for_embedding = f"{tour.name} {tour.keywords} {tour.tags}"
+            else:
+                text_for_embedding = f"{tour.name} {tour.tags}"
+            
+            texts_for_embedding.append(text_for_embedding)
+    
+    print(f"   💡 임베딩이 필요한 관광지: {len(tours_needing_embedding)}개")
+    
+    # 배치로 임베딩 생성
+    if tours_needing_embedding:
+        embeddings = embed_texts(texts_for_embedding)
+        
+        # ORM 객체에 벡터 할당
+        for tour, embedding in zip(tours_needing_embedding, embeddings):
+            tour.pref_vector = embedding
+    
+    db.commit()
+    print("✅ 관광지 임베딩 갱신 완료 (키워드 포함)")
 
     # ----------------- 6) 더미 사용자 선호 태그 로딩 ------------------------ #
     print("▶ 더미 사용자 선호 태그 로딩 중...")

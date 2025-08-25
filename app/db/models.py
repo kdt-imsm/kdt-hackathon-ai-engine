@@ -22,11 +22,12 @@ SQLAlchemy ORM 모델 정의 모듈
 사용한 마이그레이션 관리가 필요합니다.
 """
 
-from sqlalchemy import Column, Integer, String, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 from app.db.database import Base
+from datetime import datetime, timezone
 
 
 class User(Base):
@@ -75,7 +76,8 @@ class JobPost(Base):
     tags: Mapped[str] = mapped_column(String, nullable=False)  # e.g. "조개잡이,갯벌체험"
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lon: Mapped[float] = mapped_column(Float, nullable=True)
-    wage: Mapped[int] = mapped_column(Integer, nullable=True)
+    start_time: Mapped[str] = mapped_column(String, nullable=True)  # e.g. "08:00"
+    end_time: Mapped[str] = mapped_column(String, nullable=True)    # e.g. "17:00"
 
     # 1536차원 콘텐츠 벡터
     pref_vector: Mapped[list[float]] = Column(Vector(1536), nullable=True)
@@ -93,9 +95,15 @@ class TourSpot(Base):
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lon: Mapped[float] = mapped_column(Float, nullable=True)
     
-    # 🔥 NEW: TourAPI contentid 및 이미지 URL 필드 추가
+    # TourAPI contentid 및 이미지 URL 필드 추가
     contentid: Mapped[str] = mapped_column(String, nullable=True)  # TourAPI contentid
     image_url: Mapped[str] = mapped_column(String, nullable=True)  # 대표 이미지 URL
+
+    # 키워드 검색으로 수집한 상세 키워드 정보 (JSON 문자열)
+    detailed_keywords: Mapped[str] = mapped_column(Text, nullable=True)  # JSON 형태의 키워드 배열
+    
+    # 수집된 관광지 키워드 (CSV 기반)
+    keywords: Mapped[str] = mapped_column(Text, nullable=True)  # 수집된 키워드 문자열
 
     # 1536차원 콘텐츠 벡터
     pref_vector: Mapped[list[float]] = Column(Vector(1536), nullable=True)
@@ -114,3 +122,106 @@ class Feedback(Base):
 
     # 역참조: 사용자 ↔ 피드백 (N:1)
     user: Mapped["User"] = relationship(back_populates="feedbacks")
+
+
+class FarmApplication(Base):
+    """농장주 일정 신청 테이블 - 농장주가 일자리 모집을 위해 등록하는 정보."""
+    
+    __tablename__ = "farm_applications"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("jobs.id"), nullable=False)
+    farmer_contact: Mapped[str] = mapped_column(String, nullable=False)  # 농장주 연락처
+    start_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    start_time: Mapped[str] = mapped_column(String, nullable=False, default="09:00")  # 작업 시작 시간
+    end_time: Mapped[str] = mapped_column(String, nullable=False, default="17:00")   # 작업 종료 시간
+    max_workers: Mapped[int] = mapped_column(Integer, nullable=False)  # 최대 모집 인원
+    description: Mapped[str] = mapped_column(Text, nullable=True)  # 추가 설명
+    status: Mapped[str] = mapped_column(String, default="active")  # active, closed, cancelled
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # 관계
+    job: Mapped["JobPost"] = relationship()
+    youth_applications: Mapped[list["YouthApplication"]] = relationship(back_populates="farm_application")
+    schedules: Mapped[list["WorkSchedule"]] = relationship(back_populates="farm_application")
+
+
+class YouthApplication(Base):
+    """청년 신청 테이블 - 청년이 특정 농장 일자리에 신청하는 정보."""
+    
+    __tablename__ = "youth_applications"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    farm_application_id: Mapped[int] = mapped_column(ForeignKey("farm_applications.id"), nullable=False)
+    selected_jobs: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)  # 선택한 일자리 ID들
+    selected_tours: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)  # 선택한 관광지 ID들
+    preferences: Mapped[str] = mapped_column(Text, nullable=True)  # 추가 선호사항
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending, confirmed, waiting, rejected
+    queue_position: Mapped[int] = mapped_column(Integer, nullable=True)  # 대기열 순서 (1-3)
+    applied_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # 관계
+    user: Mapped["User"] = relationship()
+    farm_application: Mapped["FarmApplication"] = relationship(back_populates="youth_applications")
+
+
+class WorkSchedule(Base):
+    """최종 확정된 작업 스케줄 - Multi-Agent가 생성한 최종 일정."""
+    
+    __tablename__ = "work_schedules"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    farm_application_id: Mapped[int] = mapped_column(ForeignKey("farm_applications.id"), nullable=False)
+    youth_application_id: Mapped[int] = mapped_column(ForeignKey("youth_applications.id"), nullable=False)
+    work_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    start_time: Mapped[str] = mapped_column(String, nullable=False)  # e.g., "09:00"
+    end_time: Mapped[str] = mapped_column(String, nullable=False)    # e.g., "17:00"
+    assigned_tasks: Mapped[str] = mapped_column(Text, nullable=False)  # 할당된 작업 내용
+    transport_info: Mapped[str] = mapped_column(Text, nullable=True)    # 교통 정보
+    status: Mapped[str] = mapped_column(String, default="scheduled")  # scheduled, in_progress, completed, cancelled
+    agent_notes: Mapped[str] = mapped_column(Text, nullable=True)     # Agent가 생성한 스케줄링 노트
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # 관계
+    farm_application: Mapped["FarmApplication"] = relationship(back_populates="schedules")
+    youth_application: Mapped["YouthApplication"] = relationship()
+
+
+class AgentLog(Base):
+    """Multi-Agent 시스템 실행 로그 - 디버깅 및 모니터링용."""
+    
+    __tablename__ = "agent_logs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False)  # 세션 식별자
+    farm_application_id: Mapped[int] = mapped_column(ForeignKey("farm_applications.id"), nullable=True)
+    agent_type: Mapped[str] = mapped_column(String, nullable=False)  # farmer, planner, checker
+    input_data: Mapped[str] = mapped_column(Text, nullable=True)     # Agent 입력 데이터
+    output_data: Mapped[str] = mapped_column(Text, nullable=True)    # Agent 출력 데이터
+    execution_time: Mapped[float] = mapped_column(Float, nullable=True)  # 실행 시간 (초)
+    success: Mapped[bool] = mapped_column(Boolean, default=True)
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Notification(Base):
+    """알림 테이블 - 푸시 알림, 이메일, SMS 등 알림 내역."""
+    
+    __tablename__ = "notifications"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
+    recipient_contact: Mapped[str] = mapped_column(String, nullable=False)  # 이메일 또는 전화번호
+    notification_type: Mapped[str] = mapped_column(String, nullable=False)  # push, email, sms, calendar
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    related_id: Mapped[int] = mapped_column(Integer, nullable=True)  # 관련 레코드 ID
+    related_type: Mapped[str] = mapped_column(String, nullable=True)  # 관련 레코드 타입
+    status: Mapped[str] = mapped_column(String, default="pending")  # pending, sent, failed
+    sent_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    
+    # 관계
+    user: Mapped["User"] = relationship()

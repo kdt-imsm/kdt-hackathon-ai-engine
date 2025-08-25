@@ -32,7 +32,7 @@ tour_api_loader.py
 from __future__ import annotations
 import httpx, pandas as pd, time
 from pathlib import Path
-from typing import List
+from typing import List, Dict
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,8 @@ from app.config import get_settings
 from app.db.database import SessionLocal, Base, engine
 from app.db import models
 from app.embeddings.embedding_service import embed_texts
+from app.utils.keyword_search import get_keyword_service
+import json
 
 # httpx 클라이언트: 연결·전체 요청 타임아웃 설정
 CLIENT = httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0))
@@ -166,6 +168,55 @@ def fetch_detail_image(contentid: str) -> str | None:
     return None
 
 
+def collect_detailed_keywords(contentid_list: List[str]) -> Dict[str, List[str]]:
+    """관광지 contentid들에 대해 키워드 검색을 수행하여 상세 키워드 수집"""
+    print("🔍 상세 키워드 수집을 시작합니다...")
+    
+    # 검색할 키워드 후보 목록 (자연어 슬롯 추출에서 자주 사용되는 키워드들)
+    candidate_keywords = [
+        # 자연 관련
+        "산", "바다", "호수", "강", "폭포", "계곡", "숲", "공원", "해변", "섬",
+        "온천", "수목원", "정원", "꽃", "단풍", "벚꽃", "동굴", "절벽", "습지",
+        
+        # 문화 관련  
+        "문화재", "사찰", "교회", "궁궐", "한옥", "전통", "역사", "박물관", "미술관",
+        "전시관", "기념관", "유적지", "문화마을", "벽화", "조각상",
+        
+        # 활동 관련
+        "체험", "축제", "공연", "전시", "워크숍", "만들기", "요리", "농장", "목장",
+        "낚시", "수상스포츠", "등산", "하이킹", "캠핑", "펜션", "리조트",
+        
+        # 특수 테마
+        "야경", "일출", "일몰", "별", "드라마촬영지", "영화촬영지", "포토존",
+        "인스타그렘", "맛집", "카페", "시장", "쇼핑", "기념품"
+    ]
+    
+    keyword_service = get_keyword_service()
+    
+    # 키워드별로 검색하여 contentid 매핑 수집
+    contentid_to_keywords = {}
+    
+    for keyword in candidate_keywords:
+        print(f"   키워드 '{keyword}' 검색 중...")
+        try:
+            search_results = keyword_service.search_by_keyword(keyword, max_results=200)
+            
+            for result in search_results:
+                if result.contentid in contentid_list:
+                    if result.contentid not in contentid_to_keywords:
+                        contentid_to_keywords[result.contentid] = []
+                    contentid_to_keywords[result.contentid].append(keyword)
+            
+            time.sleep(0.2)  # API 호출 간격 조절
+            
+        except Exception as e:
+            print(f"⚠️ 키워드 '{keyword}' 검색 실패: {e}")
+            continue
+    
+    print(f"✅ 키워드 수집 완료: {len(contentid_to_keywords)}개 관광지에 대한 키워드 정보")
+    return contentid_to_keywords
+
+
 def to_dataframe(items: List[dict]) -> pd.DataFrame:
     """TourAPI raw 응답(list[dict]) → 표준화된 DataFrame 변환."""
     rows = []
@@ -184,7 +235,7 @@ def to_dataframe(items: List[dict]) -> pd.DataFrame:
                 region=region,   # 주소 앞단(시/도)
                 lat=float(it["mapy"]),                        # 위도
                 lon=float(it["mapx"]),                        # 경도
-                # 🔥 NEW: contentid 추가
+                # contentid 추가
                 contentid=it.get("contentid", ""),           # TourAPI contentid
                 # cat1 == "A01" (자연) → 자연 태그, 그 외 문화 태그 부여
                 tags="관광,자연" if it.get("cat1") == "A01" else "관광,문화",
@@ -218,7 +269,7 @@ def main():
     page_size = DEFAULT_PARAMS["numOfRows"]  # 100
     total_pages = (total_count + page_size - 1) // page_size  # 올림 계산
     
-    print(f"📊 전체 {total_count}개 데이터, {total_pages}페이지 예상")
+    print(f"전체 {total_count}개 데이터, {total_pages}페이지 예상")
     print(f"🔄 1/{total_pages} 페이지 완료 ({len(items)}건)")
     
     # 2) 나머지 페이지 순회 (최대 1000페이지로 안전장치)
@@ -255,19 +306,33 @@ def main():
     df["image_url"] = image_urls
     print(f"✅ 이미지 수집 완료: {sum(1 for url in image_urls if url)}개 이미지")
 
-    # 5) DB INSERT (ORM 객체 생성 후 bulk_save)
+    # 5) 상세 키워드 수집
+    contentid_list = [str(cid) for cid in df["contentid"].tolist() if cid]
+    keyword_mapping = collect_detailed_keywords(contentid_list)
+    
+    # DataFrame에 키워드 정보 추가
+    detailed_keywords_list = []
+    for _, row in df.iterrows():
+        contentid = str(row["contentid"])
+        keywords = keyword_mapping.get(contentid, [])
+        detailed_keywords_list.append(json.dumps(keywords, ensure_ascii=False))
+    
+    df["detailed_keywords"] = detailed_keywords_list
+    print(f"✅ 키워드 매핑 완료: {sum(1 for k in detailed_keywords_list if k != '[]')}개 관광지에 키워드 정보 추가")
+
+    # 6) DB INSERT (ORM 객체 생성 후 bulk_save)
     spots = [models.TourSpot(**row) for row in df.to_dict("records")]
     db.bulk_save_objects(spots, return_defaults=False)
     db.commit()
 
-    # 6) 태그 임베딩 → pref_vector 컬럼 저장
+    # 7) 태그 임베딩 → pref_vector 컬럼 저장
     print("🤖 OpenAI 임베딩 생성 중...")
     embeddings = embed_texts(df["tags"].tolist())
     for spot, vec in zip(spots, embeddings):
         spot.pref_vector = vec
     db.commit()
 
-    print(f"✅ 데이터베이스 저장 완료: {len(spots)}개 관광지 + 임베딩 + 이미지")
+    print(f"✅ 데이터베이스 저장 완료: {len(spots)}개 관광지 + 임베딩 + 이미지 + 키워드")
 
 
 if __name__ == "__main__":

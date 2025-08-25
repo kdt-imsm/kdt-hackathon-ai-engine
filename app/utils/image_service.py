@@ -95,7 +95,7 @@ class OnDemandImageService:
             results[contentid] = self.get_image_url(contentid, name)
         
         success_count = sum(1 for url in results.values() if url)
-        print(f"📊 이미지 수집 결과: {success_count}/{len(contentids)}개 성공")
+        print(f"이미지 수집 결과: {success_count}/{len(contentids)}개 성공")
         
         return results
 

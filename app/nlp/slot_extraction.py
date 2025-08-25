@@ -71,6 +71,19 @@ CRITICAL: For region_pref field:
 - Valid region examples when mentioned: "제주도", "서울", "부산", "경기도", "강원도", "전라북도", "전라남도", "경상북도", "경상남도", "충청북도", "충청남도"
 - Keep exact format as mentioned by user
 
+CRITICAL: For activity_tags field:
+- Extract ALL activity-related keywords including natural environments, activities, experiences, festivals, and specific attractions
+- COMPREHENSIVE keyword categories to extract:
+  * Natural environments: "바다", "산", "강", "호수", "계곡", "섬", "해변", "숲", "공원"
+  * Activities: "체험", "관광", "등산", "트레킹", "낚시", "수영", "서핑", "스키", "캠핑"
+  * Cultural: "문화", "축제", "페스티벌", "전시", "박물관", "미술관", "사찰", "궁궐", "한옥"
+  * Recreational: "휴양", "힐링", "스파", "온천", "놀이공원", "테마파크", "동물원", "수족관"
+  * Agricultural: "농업", "농장", "목장", "과수원", "포도원", "딸기", "사과", "배", "쌀"
+  * Local specialties: "맛집", "특산물", "전통시장", "야시장", "카페", "맥주", "와인"
+  * Seasonal: "벚꽃", "단풍", "눈", "겨울", "여름", "봄", "가을"
+- Extract specific activity verbs as nouns: "보다" → "관광", "먹다" → "맛집", "즐기다" → "체험"
+- Be comprehensive in extracting relevant keywords for better recommendation matching
+
 Answer with valid JSON matching the slot schema.
 """
     function_schema = {
@@ -82,7 +95,7 @@ Answer with valid JSON matching the slot schema.
                 "start_date":        {"type": "string", "format": "date", "description": "여행 시작 날짜 (YYYY-MM-DD)"},
                 "end_date":          {"type": "string", "format": "date", "description": "여행 종료 날짜 (YYYY-MM-DD)"},
                 "region_pref":       {"type": "array",  "items": {"type": "string"}, "description": "사용자가 명시적으로 언급한 지역만 추출. 언급되지 않으면 빈 배열 []"},
-                "activity_tags":     {"type": "array",  "items": {"type": "string"}, "description": "활동 태그 (예: ['농업체험', '관광'])"},
+                "activity_tags":     {"type": "array",  "items": {"type": "string"}, "description": "활동, 체험, 관광지, 자연환경 태그 (예: ['농업체험', '관광', '바다', '산', '문화', '체험', '휴양'])"},
                 "budget_krw":        {"type": "integer", "description": "예산 (원, 0이면 미지정)"},
                 "transport_mode":    {"type": "string"},
                 "accommodation_need":{"type": "boolean"},
@@ -142,7 +155,7 @@ Answer with valid JSON matching the slot schema.
             normalized_regions.append(region)
             
             # 시도명 추출 및 추가 (시/군/구에서 자동 추론 포함)
-            from app.utils.location import extract_sido, extract_sido_from_sigungu, COMPREHENSIVE_REGION_MAPPING
+            from app.utils.location import extract_sido, COMPREHENSIVE_REGION_MAPPING
             sido = extract_sido(region)
             if sido and sido != region and sido not in normalized_regions:
                 normalized_regions.append(sido)

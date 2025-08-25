@@ -85,7 +85,7 @@ def update_user_pref_vector(
     new_vecs: List[List[float]],
 ) -> List[float]:
     """User.pref_vector 갱신 후 평균 벡터 반환."""
-    if user.pref_vector:
+    if user.pref_vector is not None and len(user.pref_vector) > 0:
         combined = average_embeddings([user.pref_vector] + new_vecs)
     else:
         combined = average_embeddings(new_vecs)

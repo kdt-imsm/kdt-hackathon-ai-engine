@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>페르소나 기반 시연 - 지현(25세) 로컬라이프 체험형</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(
+          135deg,
+          #ff9a9e 0%,
+          #fecfef 50%,
+          #fecfef 100%
+        );
+        min-height: 100vh;
+        color: #333;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: white;
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      .persona-profile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 20px;
+      }
+
+      .persona-avatar {
+        width: 100px;
+        height: 100px;
+        background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+      }
+
+      .persona-info h1 {
+        color: #e91e63;
+        margin-bottom: 10px;
+      }
+
+      .persona-info p {
+        color: #666;
+        font-size: 1.1em;
+      }
+
+      .persona-tags {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .tag {
+        background: #ff9a9e;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+      }
+
+      .demo-section {
+        background: white;
+        border-radius: 20px;
+        padding: 30px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      .demo-section h2 {
+        color: #e91e63;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .scenario-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .scenario-card {
+        border: 2px solid #f0f0f0;
+        border-radius: 15px;
+        padding: 20px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .scenario-card:hover,
+      .scenario-card.selected {
+        border-color: #ff9a9e;
+        background: #fff5f8;
+        transform: translateY(-3px);
+      }
+
+      .scenario-title {
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #333;
+      }
+
+      .scenario-description {
+        font-size: 0.9em;
+        color: #666;
+        line-height: 1.5;
+      }
+
+      .demo-button {
+        background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 10px;
+        font-size: 1.1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .demo-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(255, 154, 158, 0.3);
+      }
+
+      .demo-button:disabled {
+        background: #ccc;
+        transform: none;
+        box-shadow: none;
+        cursor: not-allowed;
+      }
+
+      .progress-bar {
+        background: #f0f0f0;
+        height: 8px;
+        border-radius: 4px;
+        margin: 20px 0;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        background: linear-gradient(90deg, #ff9a9e, #fad0c4);
+        height: 100%;
+        width: 0%;
+        transition: width 0.5s ease;
+      }
+
+      .demo-steps {
+        display: none;
+      }
+
+      .demo-steps.active {
+        display: block;
+      }
+
+      .step {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 15px 0;
+        border-left: 4px solid #ff9a9e;
+      }
+
+      .step.processing {
+        background: #fff8e1;
+        border-left-color: #ffc107;
+      }
+
+      .step.completed {
+        background: #e8f5e8;
+        border-left-color: #28a745;
+      }
+
+      .step-title {
+        font-weight: 600;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .step-content {
+        color: #666;
+      }
+
+      .result-display {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        white-space: pre-wrap;
+        line-height: 1.6;
+        font-family: "Georgia", serif;
+        border: 2px solid #ff9a9e;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+      }
+
+      .stat-card {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #f0f0f0;
+      }
+
+      .stat-value {
+        font-size: 2em;
+        font-weight: 600;
+        color: #e91e63;
+      }
+
+      .stat-label {
+        color: #666;
+        font-size: 0.9em;
+      }
+
+      .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #ff9a9e;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .success-message {
+        background: #d4edda;
+        color: #155724;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 15px 0;
+        border: 1px solid #c3e6cb;
+      }
+
+      .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 15px 0;
+        border: 1px solid #f5c6cb;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div class="persona-profile">
+          <div class="persona-avatar">👩‍🎓</div>
+          <div class="persona-info">
+            <h1>지현 (25세) - 로컬라이프 체험형</h1>
+            <p>SNS 활동을 즐기고, 살아보는 여행을 선호하는 외향적 대학생</p>
+          </div>
+        </div>
+        <div class="persona-tags">
+          <span class="tag">마을 사람들과 어울리기</span>
+          <span class="tag">시장 탐방</span>
+          <span class="tag">지역 먹거리 체험</span>
+          <span class="tag">1주일씩 2곳 농가</span>
+          <span class="tag">총 14-16일</span>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <h2>시연 시나리오 선택</h2>
+        <div class="scenario-selector">
+          <div class="scenario-card" data-scenario="scenario1">
+            <div class="scenario-title">시나리오 1: 전체 여행 계획</div>
+            <div class="scenario-description">
+              9월에 충청도에서 2주간의 농가 체류 여행을 계획합니다. 전통 농가
+              체험과 지역 문화 탐방을 결합한 완전한 일정을 생성합니다.
+            </div>
+          </div>
+          <div class="scenario-card" data-scenario="scenario2">
+            <div class="scenario-title">시나리오 2: 첫 주 집중 계획</div>
+            <div class="scenario-description">
+              논산 전통 포도 농가에서의 첫 1주일 일정에 집중합니다. 연산시장
+              마을 프로그램과 연계한 상세 일정을 만듭니다.
+            </div>
+          </div>
+          <div class="scenario-card" data-scenario="scenario3">
+            <div class="scenario-title">시나리오 3: 맞춤형 추천</div>
+            <div class="scenario-description">
+              지현의 성향(SNS 활동, 마을 어울리기)에 특화된 맞춤형 농가와 체험
+              프로그램을 추천합니다.
+            </div>
+          </div>
+        </div>
+
+        <button class="demo-button" onclick="startPersonaDemo()" id="startBtn">
+          <span id="startBtnText">페르소나 시연 시작</span>
+          <span
+            class="loading-spinner"
+            id="startSpinner"
+            style="display: none"
+          ></span>
+        </button>
+
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+
+      <div class="demo-section">
+        <h2>시연 진행 과정</h2>
+        <div class="demo-steps" id="demoSteps">
+          <div class="step" id="step1">
+            <div class="step-title">
+              <span>▶️</span>
+              <span>1단계: 페르소나 기반 자연어 쿼리 생성</span>
+            </div>
+            <div class="step-content">
+              지현의 특성과 선호도를 반영한 자연어 쿼리를 자동 생성합니다.
+            </div>
+          </div>
+
+          <div class="step" id="step2">
+            <div class="step-title">
+              <span>▶️</span>
+              <span>2단계: AI 슬롯 추출 및 카드 추천</span>
+            </div>
+            <div class="step-content">
+              GPT-4o-mini를 사용하여 쿼리를 분석하고 최적의 농가/관광지 카드를
+              추천합니다.
+            </div>
+          </div>
+
+          <div class="step" id="step3">
+            <div class="step-title">
+              <span>▶️</span>
+              <span>3단계: 페르소나 맞춤 카드 자동 선택</span>
+            </div>
+            <div class="step-content">
+              지현의 선호도(전통농가, 로컬체험)에 맞는 카드를 자동으로
+              선택합니다.
+            </div>
+          </div>
+
+          <div class="step" id="step4">
+            <div class="step-title">
+              <span>▶️</span>
+              <span>4단계: GPT-4o 스마트 스케줄링</span>
+            </div>
+            <div class="step-content">
+              지리적/시간적/개인화 최적화를 통해 완벽한 2주 일정을 생성합니다.
+            </div>
+          </div>
+
+          <div class="step" id="step5">
+            <div class="step-title">
+              <span>✨</span>
+              <span>5단계: 개인화 일정 완성</span>
+            </div>
+            <div class="step-content">
+              지현의 성향에 맞춘 활동 배치와 마을 행사 연계 일정을 완성합니다.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-section" id="resultSection" style="display: none">
+        <h2>생성된 페르소나 맞춤 일정</h2>
+
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-value" id="totalDays">0</div>
+            <div class="stat-label">총 여행 일수</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="farmCount">0</div>
+            <div class="stat-label">체험 농가 수</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="activityCount">0</div>
+            <div class="stat-label">총 활동 수</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="execTime">0</div>
+            <div class="stat-label">생성 시간 (초)</div>
+          </div>
+        </div>
+
+        <div class="result-display" id="itineraryResult"></div>
+
+        <div class="success-message" id="successMessage" style="display: none">
+          페르소나 기반 완벽 시연이 성공적으로 완료되었습니다!
+        </div>
+
+        <button
+          class="demo-button"
+          onclick="testItineraryModification()"
+          style="margin-top: 20px"
+        >
+          ✏️ 일정 수정 테스트 (피드백 시스템)
+        </button>
+      </div>
+    </div>
+
+    <script>
+      let selectedScenario = "scenario1"; // 기본값
+      let currentSessionId = null;
+
+      // 시나리오 선택
+      document.querySelectorAll(".scenario-card").forEach((card) => {
+        card.addEventListener("click", function () {
+          document
+            .querySelectorAll(".scenario-card")
+            .forEach((c) => c.classList.remove("selected"));
+          this.classList.add("selected");
+          selectedScenario = this.dataset.scenario;
+        });
+      });
+
+      // 기본 시나리오 선택
+      document
+        .querySelector('[data-scenario="scenario1"]')
+        .classList.add("selected");
+
+      // 페르소나 시연 시작
+      async function startPersonaDemo() {
+        const startBtn = document.getElementById("startBtn");
+        const startBtnText = document.getElementById("startBtnText");
+        const startSpinner = document.getElementById("startSpinner");
+
+        startBtn.disabled = true;
+        startBtnText.textContent = "페르소나 시연 진행 중...";
+        startSpinner.style.display = "inline-block";
+
+        document.getElementById("demoSteps").classList.add("active");
+
+        try {
+          // 1단계: 페르소나 기반 쿼리 생성
+          await executeStep(1, async () => {
+            const query = generatePersonaQuery();
+            console.log("Generated query:", query);
+            return { query };
+          });
+
+          // 2단계: 슬롯 추출 및 카드 추천
+          const slotsResult = await executeStep(2, async () => {
+            const query = generatePersonaQuery();
+            const response = await fetch("/slots", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ query: query }),
+            });
+            return await response.json();
+          });
+
+          if (!slotsResult.success) {
+            throw new Error("슬롯 추출 실패: " + slotsResult.error);
+          }
+
+          // 3단계: 페르소나 맞춤 카드 선택
+          const selectedCards = await executeStep(3, async () => {
+            return selectPersonaCards(
+              slotsResult.jobs_preview,
+              slotsResult.tours_preview
+            );
+          });
+
+          // 4단계: 스마트 스케줄링
+          const scheduleResult = await executeStep(4, async () => {
+            const query = generatePersonaQuery();
+            const response = await fetch("/smart-schedule", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                query: query,
+                user_id: null,
+                budget: 800000, // 지현의 2주 예산
+                selected_jobs: selectedCards.jobs,
+                selected_tours: selectedCards.tours,
+              }),
+            });
+            return await response.json();
+          });
+
+          if (!scheduleResult.success) {
+            throw new Error(
+              "스마트 스케줄링 실패: " + scheduleResult.error_message
+            );
+          }
+
+          currentSessionId = scheduleResult.session_id;
+
+          // 5단계: 결과 표시
+          await executeStep(5, async () => {
+            displayResults(scheduleResult);
+            return { completed: true };
+          });
+
+          // 완료
+          document.getElementById("resultSection").style.display = "block";
+          document.getElementById("successMessage").style.display = "block";
+        } catch (error) {
+          console.error("페르소나 시연 오류:", error);
+          alert("페르소나 시연 중 오류가 발생했습니다: " + error.message);
+        } finally {
+          startBtn.disabled = false;
+          startBtnText.textContent = "🚀 페르소나 시연 시작";
+          startSpinner.style.display = "none";
+        }
+      }
+
+      // 페르소나 기반 쿼리 생성
+      function generatePersonaQuery() {
+        const queries = {
+          scenario1:
+            "9월에 충청도에서 2주간 농가 체류하며 전통 농업 체험하고 마을 사람들과 어울리고 지역 시장 탐방하고 싶어. SNS용 사진도 많이 찍고 싶고 로컬 먹거리도 체험하고 싶어.",
+          scenario2:
+            "논산에서 1주일간 전통 포도 농가에 체류하며 포도 수확과 포장 작업 도와주고 연산시장에서 마을 행사 참여하고 지역 사람들과 어울리고 싶어.",
+          scenario3:
+            "농촌에서 마을 사람들과 친해지고 시장 탐방하며 지역 먹거리 체험하고 SNS 활동할 수 있는 재미있는 농가 체험 찾고 있어. 판매 보조나 간단한 수확 작업 선호해.",
+        };
+        return queries[selectedScenario] || queries["scenario1"];
+      }
+
+      // 페르소나 맞춤 카드 선택
+      function selectPersonaCards(jobs, tours) {
+        // 지현의 선호도에 맞는 카드 자동 선택
+        const selectedJobs = [];
+        const selectedTours = [];
+
+        // 농가: 전통농가, 포도/과일 농가 우선 선택
+        jobs.forEach((job) => {
+          if (selectedJobs.length < 3) {
+            const title = job.title.toLowerCase();
+            const description = job.description.toLowerCase();
+
+            if (
+              title.includes("전통") ||
+              title.includes("포도") ||
+              title.includes("과일") ||
+              title.includes("체험") ||
+              description.includes("마을") ||
+              description.includes("시장")
+            ) {
+              selectedJobs.push(job.id);
+            }
+          }
+        });
+
+        // 부족하면 상위 카드로 채움
+        if (selectedJobs.length < 2) {
+          for (let i = 0; i < Math.min(2, jobs.length); i++) {
+            if (!selectedJobs.includes(jobs[i].id)) {
+              selectedJobs.push(jobs[i].id);
+            }
+          }
+        }
+
+        // 관광지: 시장, 마을, 문화 체험 우선 선택
+        tours.forEach((tour) => {
+          if (selectedTours.length < 4) {
+            const title = tour.title.toLowerCase();
+            const description = tour.description.toLowerCase();
+
+            if (
+              title.includes("시장") ||
+              title.includes("마을") ||
+              title.includes("문화") ||
+              title.includes("체험") ||
+              title.includes("전통") ||
+              description.includes("먹거리")
+            ) {
+              selectedTours.push(tour.id);
+            }
+          }
+        });
+
+        // 부족하면 상위 카드로 채움
+        if (selectedTours.length < 3) {
+          for (let i = 0; i < Math.min(3, tours.length); i++) {
+            if (!selectedTours.includes(tours[i].id)) {
+              selectedTours.push(tours[i].id);
+            }
+          }
+        }
+
+        return { jobs: selectedJobs, tours: selectedTours };
+      }
+
+      // 단계별 실행
+      async function executeStep(stepNum, asyncFn) {
+        const stepElement = document.getElementById(`step${stepNum}`);
+        stepElement.classList.add("processing");
+
+        updateProgress(stepNum * 20);
+
+        try {
+          const result = await asyncFn();
+          stepElement.classList.remove("processing");
+          stepElement.classList.add("completed");
+          return result;
+        } catch (error) {
+          stepElement.classList.remove("processing");
+          throw error;
+        }
+      }
+
+      // 진행률 업데이트
+      function updateProgress(percentage) {
+        document.getElementById("progressFill").style.width = percentage + "%";
+      }
+
+      // 결과 표시
+      function displayResults(scheduleResult) {
+        // 통계 업데이트
+        const itinerary = scheduleResult.natural_language_itinerary || "";
+        const dayMatches = itinerary.match(/\d+일차/g) || [];
+        const farmMatches = itinerary.match(/농가|농장/g) || [];
+        const activityMatches = itinerary.match(/🌾|🏞️/g) || [];
+
+        document.getElementById("totalDays").textContent =
+          dayMatches.length || 0;
+        document.getElementById("farmCount").textContent = Math.min(
+          farmMatches.length,
+          2
+        ); // 최대 2농가
+        document.getElementById("activityCount").textContent =
+          activityMatches.length || 0;
+        document.getElementById("execTime").textContent = (
+          scheduleResult.execution_time || 0
+        ).toFixed(2);
+
+        // 일정 내용 표시
+        document.getElementById("itineraryResult").textContent = itinerary;
+
+        updateProgress(100);
+      }
+
+      // 일정 수정 테스트
+      async function testItineraryModification() {
+        if (!currentSessionId) {
+          alert("세션 ID가 없습니다. 먼저 일정을 생성해주세요.");
+          return;
+        }
+
+        try {
+          const response = await fetch("/itinerary/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: currentSessionId,
+              modifications: [
+                {
+                  type: "change_time",
+                  date: "2025-09-01",
+                  activity_id: "1",
+                  new_start_time: "10:00",
+                  new_end_time: "14:00",
+                },
+              ],
+              user_preferences: {
+                activity_style: "relaxed",
+                focus_areas: ["시장탐방", "SNS촬영", "마을어울리기"],
+              },
+            }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            alert(
+              `피드백 시스템 테스트 완료!\n\n실행시간: ${(
+                data.execution_time || 0
+              ).toFixed(2)}초\n변경사항: ${
+                data.changes_summary
+                  ? data.changes_summary.join(", ")
+                  : "시간 배치 최적화"
+              }`
+            );
+
+            if (data.updated_itinerary) {
+              document.getElementById("itineraryResult").textContent =
+                data.updated_itinerary;
+            }
+          } else {
+            throw new Error(data.error || "피드백 처리 실패");
+          }
+        } catch (error) {
+          console.error("피드백 테스트 오류:", error);
+          alert(
+            "피드백 시스템 테스트 중 오류가 발생했습니다: " + error.message
+          );
+        }
+      }
+    </script>
+  </body>
+</html>
