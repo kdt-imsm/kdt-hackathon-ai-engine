@@ -36,12 +36,23 @@ from pydantic import BaseModel, Field, validator
 # 1) 슬롯 추출용 스키마
 # ─────────────────────────────────────────────────────────────────
 
+class UserPreferences(BaseModel):
+    """사용자 선호도 설정 모델."""
+    terrain_tags: List[str] = Field(default_factory=list, description="지형 선호도 태그")
+    activity_style_tags: List[str] = Field(default_factory=list, description="활동 스타일 태그")
+    job_tags: List[str] = Field(default_factory=list, description="농업 일자리 종류 태그")
+    preference_details: Optional[str] = Field(default=None, description="추가 자연어 선호도")
+
 class SlotQuery(BaseModel):
     """사용자 자연어 쿼리 하나를 감싸는 Request Body 모델."""
     query: str = Field(
         ...,  # 필수값
         example="9월 첫째 주 고창에서 조개잡이 + 해변 관광하고 싶어요",
         description="일·여행 조건이 포함된 자연어 문장",
+    )
+    user_preferences: Optional[UserPreferences] = Field(
+        default=None,
+        description="사용자 선호도 설정 (4단계 입력)"
     )
 
 
@@ -65,6 +76,43 @@ class TourPreview(BaseModel):
     overview: str
     image_url: Optional[str] = None  # 이미지 URL 필드 추가
     matched_keywords: Optional[List[str]] = Field(default_factory=list, description="키워드 검색으로 매칭된 키워드들")  # 매칭된 키워드 필드
+
+
+class AccommodationCard(BaseModel):
+    """숙박 시설 카드 정보."""
+    id: int
+    name: str
+    region: str
+    tags: List[str]
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    image_url: Optional[str] = None
+    distance: Optional[float] = None  # km 단위
+    checkin_time: Optional[str] = None
+    checkout_time: Optional[str] = None
+    room_count: Optional[str] = None
+    parking: Optional[str] = None
+    facilities: Optional[str] = None
+    keywords: Optional[str] = ""
+
+
+class RestaurantCard(BaseModel):
+    """음식점 카드 정보."""
+    id: int
+    name: str
+    region: str
+    tags: List[str]
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    image_url: Optional[str] = None
+    distance: Optional[float] = None  # km 단위
+    menu: Optional[str] = None
+    open_time: Optional[str] = None
+    rest_date: Optional[str] = None
+    parking: Optional[str] = None
+    reservation: Optional[str] = None
+    packaging: Optional[str] = None
+    keywords: Optional[str] = ""
 
 
 class SlotsResponse(BaseModel):
@@ -91,6 +139,10 @@ class RecommendRequest(RecommendationRequest):
     selected_jobs: List[int] = Field(default_factory=list)
     selected_tours: List[int] = Field(default_factory=list)
     budget: Optional[int] = Field(default=None, description="예산 (선택적, 스마트 스케줄링에서는 사용하지 않음)")
+    user_preferences: Optional[UserPreferences] = Field(
+        default=None,
+        description="사용자 선호도 설정 (4단계 입력)"
+    )
 
     @validator('selected_jobs', pre=True)
     def validate_selected_jobs(cls, v):
@@ -180,6 +232,16 @@ class DetailedItineraryResponse(BaseModel):
     # 요약 정보
     summary: Dict[str, Any] = Field(
         description="일정 요약 정보 (선택한 일거리/관광지 수, 지역 등)"
+    )
+    
+    # 숙박 및 음식점 추천
+    accommodations: List[AccommodationCard] = Field(
+        default_factory=list,
+        description="추천 숙박 시설 목록"
+    )
+    restaurants: List[RestaurantCard] = Field(
+        default_factory=list,
+        description="추천 음식점 목록"
     )
     
     # 성공 여부

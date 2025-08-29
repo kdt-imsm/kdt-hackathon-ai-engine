@@ -79,7 +79,7 @@ class IntelligentRecommender:
         print(f"     1단계: {len(accumulated_results)}개 발견 (정확 매칭)")
         
         # 2단계: 결과가 부족하면 지능적 확장
-        if len(accumulated_results) < 5:  # 5개 미만이면 확장
+        if len(accumulated_results) < target_count:  # 목표 수보다 적으면 확장
             print(f"     결과 부족 ({len(accumulated_results)}개), 지능적 지역 확장 시작")
             expansion_levels = get_intelligent_region_expansion(region_filter)
             
@@ -110,6 +110,18 @@ class IntelligentRecommender:
                 if len(accumulated_results) >= target_count:
                     print(f"      충분한 결과 확보")
                     break
+            
+            # 3단계: 여전히 부족하면 전국 검색으로 강제 보완
+            if len(accumulated_results) < target_count:
+                needed_count = target_count - len(accumulated_results)
+                print(f"     지역 확장 후에도 부족 ({len(accumulated_results)}개), 전국 검색으로 {needed_count}개 추가")
+                
+                fallback_results = self._find_closest_matches(
+                    user_vector, searched_job_ids, needed_count, "job", threshold=0.1
+                )
+                
+                accumulated_results.extend(fallback_results)
+                print(f"     전국 검색으로 {len(fallback_results)}개 추가 (최종: {len(accumulated_results)}개)")
         else:
             print(f"     충분한 결과 확보, 지역 확장 생략")
         
@@ -177,7 +189,7 @@ class IntelligentRecommender:
         print(f"     1단계: {len(accumulated_results)}개 발견 (정확 매칭)")
         
         # 2단계: 결과가 부족하면 지능적 확장
-        if len(accumulated_results) < 5:  # 5개 미만이면 확장
+        if len(accumulated_results) < target_count:  # 목표 수보다 적으면 확장
             print(f"     결과 부족 ({len(accumulated_results)}개), 지능적 지역 확장 시작")
             expansion_levels = get_intelligent_region_expansion(region_filter)
             
@@ -215,6 +227,18 @@ class IntelligentRecommender:
                 if len(accumulated_results) >= target_count:
                     print(f"      충분한 결과 확보")
                     break
+            
+            # 3단계: 여전히 부족하면 전국 검색으로 강제 보완
+            if len(accumulated_results) < target_count:
+                needed_count = target_count - len(accumulated_results)
+                print(f"     지역 확장 후에도 부족 ({len(accumulated_results)}개), 전국 검색으로 {needed_count}개 추가")
+                
+                fallback_results = self._find_closest_matches(
+                    user_vector, searched_tour_ids, needed_count, "tour", activity_keywords, threshold=0.1
+                )
+                
+                accumulated_results.extend(fallback_results)
+                print(f"     전국 검색으로 {len(fallback_results)}개 추가 (최종: {len(accumulated_results)}개)")
         else:
             print(f"     충분한 결과 확보, 지역 확장 생략")
         

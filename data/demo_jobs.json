@@ -1,0 +1,57 @@
+[
+  {
+    "title": "사과 수확 도우미",
+    "work_date": "2025-09-05~2025-09-11",
+    "work_hours": "08:00-15:00",
+    "required_people": "3-4명",
+    "region": "전북 김제시",
+    "address": "전북 김제시 봉남면 사과로 456",
+    "crop_type": "사과",
+    "preference_condition": "젊은층 환영/체험 중심",
+    "image_url": "/public/images/demo/apple_harvest.jpg"
+  },
+  {
+    "title": "벼·곡물 수확",
+    "work_date": "2025-09-13~2025-09-18",
+    "work_hours": "09:00-17:00",
+    "required_people": "2-3명",
+    "region": "전북 김제시",
+    "address": "전북 김제시 금산면 벽골로 123",
+    "crop_type": "벼",
+    "preference_condition": "전통농법 체험/청년 환영",
+    "image_url": "/public/images/demo/rice_harvest.jpg"
+  },
+  {
+    "title": "밤 수확 체험",
+    "work_date": "2025-09-18~2025-09-22",
+    "work_hours": "08:30-15:30",
+    "required_people": "2명",
+    "region": "전북 김제시",
+    "address": "전북 김제시 부량면 밤나무길 789",
+    "crop_type": "밤",
+    "preference_condition": "힐링/문화체험 선호",
+    "image_url": "/public/images/demo/chestnut_harvest.jpg"
+  },
+  {
+    "title": "고구마 수확 축제",
+    "work_date": "2025-09-25~2025-09-29",
+    "work_hours": "09:00-17:00",
+    "required_people": "4-5명",
+    "region": "전북 김제시",
+    "address": "전북 김제시 청하면 고구마로 321",
+    "crop_type": "고구마",
+    "preference_condition": "가족단위/체험형",
+    "image_url": "/public/images/demo/sweet_potato_festival.jpg"
+  },
+  {
+    "title": "곶감 선별 포장 작업",
+    "work_date": "2025-10-01~2025-10-05",
+    "work_hours": "08:00-16:00",
+    "required_people": "3명",
+    "region": "전북 김제시",
+    "address": "전북 김제시 금산면 벽골로 124",
+    "crop_type": "감",
+    "preference_condition": "꼼꼼한 성격/체험 선호",
+    "image_url": "/public/images/demo/persimmon_work.jpg"
+  }
+]

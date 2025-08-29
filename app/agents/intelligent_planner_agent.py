@@ -26,10 +26,19 @@ settings = get_settings()
 class IntelligentPlannerAgent:
     """지능형 일정 배치 전문 AI Agent."""
     
-    def __init__(self):
+    def __init__(self, db_session=None):
         self.client = OpenAI(api_key=settings.openai_api_key)
         self.model = "gpt-4o"  # 복합적 조건 분석을 위한 최상위 모델
         self.execution_logs = []
+        
+        # 데이터베이스 세션 초기화
+        if db_session is None:
+            from app.db.database import SessionLocal
+            self.db_session = SessionLocal()
+            self._should_close_session = True
+        else:
+            self.db_session = db_session
+            self._should_close_session = False
     
     def analyze_geographical_optimization(
         self,
@@ -258,7 +267,7 @@ class IntelligentPlannerAgent:
         
         locations = []
         
-        # 농가 정보 수집
+        # 농가 정보 수집 (새로운 구조 반영)
         for job in selected_jobs:
             locations.append({
                 "id": f"job_{job.id}",
@@ -267,10 +276,15 @@ class IntelligentPlannerAgent:
                 "region": getattr(job, 'region', '지역미상'),
                 "lat": getattr(job, 'lat', None),
                 "lon": getattr(job, 'lon', None),
+                "work_date": getattr(job, 'work_date', None),  # 실제 작업 날짜
+                "work_hours": getattr(job, 'work_hours', None),  # 실제 근무시간
                 "working_hours": {
                     "start": getattr(job, 'start_time', '09:00'),
                     "end": getattr(job, 'end_time', '17:00')
                 },
+                "address": getattr(job, 'address', ''),  # 농가 주소
+                "crop_type": getattr(job, 'crop_type', ''),  # 작물
+                "image_url": getattr(job, 'image_url', ''),  # 이미지 URL
                 "tags": getattr(job, 'tags', '').split(',') if hasattr(job, 'tags') else []
             })
         
@@ -396,21 +410,28 @@ class IntelligentPlannerAgent:
             "activity_constraints": []
         }
         
-        # 농가 작업 시간 제약
+        # 농가 작업 시간 제약 (실제 날짜와 시간 반영)
         for job in selected_jobs:
+            # work_hours에서 시작/종료 시간 파싱 (예: "08:00-15:00")
+            start_time, end_time = self._parse_work_hours(getattr(job, 'work_hours', ''))
+            if not start_time:
+                start_time = getattr(job, 'start_time', '09:00')
+                end_time = getattr(job, 'end_time', '17:00')
+                
             constraints["activity_constraints"].append({
                 "id": f"job_{job.id}",
                 "name": job.title,
                 "type": "job",
+                "work_date": getattr(job, 'work_date', None),  # 실제 작업 날짜
                 "mandatory_hours": {
-                    "start": getattr(job, 'start_time', '09:00'),
-                    "end": getattr(job, 'end_time', '17:00')
+                    "start": start_time,
+                    "end": end_time
                 },
-                "duration_hours": self._calculate_duration_hours(
-                    getattr(job, 'start_time', '09:00'),
-                    getattr(job, 'end_time', '17:00')
-                ),
-                "flexibility": "low"  # 농가 시간은 유연성 낮음
+                "duration_hours": self._calculate_duration_hours(start_time, end_time),
+                "flexibility": "low",  # 농가 시간은 유연성 낮음
+                "address": getattr(job, 'address', ''),
+                "crop_type": getattr(job, 'crop_type', ''),
+                "image_url": getattr(job, 'image_url', '')
             })
         
         # 관광지 운영 시간 제약
@@ -437,19 +458,21 @@ class IntelligentPlannerAgent:
     ) -> Dict[str, Any]:
         """GPT-4o를 활용한 시간적 최적화."""
         
-        system_prompt = """당신은 여행 일정의 시간적 최적화를 전문으로 하는 AI입니다.
+        system_prompt = """당신은 개인 맞춤형 일여행 추천 서비스의 시간적 최적화를 전문으로 하는 AI입니다.
 
 주어진 시간 제약 조건과 지리적 배치를 고려하여 다음을 수행하세요:
 
 1. **일별 시간표 생성**: 각 날짜별로 활동의 시작/종료 시간 배정
 2. **시간 충돌 해결**: 겹치는 시간이나 불가능한 이동 시간 조정
 3. **휴식 시간 확보**: 적절한 식사 시간과 휴식 시간 배치
-4. **논리적 흐름**: 아침→점심→오후→저녁의 자연스러운 순서
+4. **농가-관광 연계**: 농가 일거리 종료 후 관광 활동을 자연스럽게 연결
 
-**중요한 원칙:**
-- 농가 작업 시간은 농장주가 지정한 시간 준수
-- 관광지는 운영 시간 내에서 유연하게 배치
-- 이동 시간을 충분히 고려 (지역 간 이동 1-2시간)
+**핵심 원칙 - 개인 맞춤형 일여행:**
+- 농가 작업 시간은 농장주가 지정한 시간 엄격히 준수 (예: 08:00-15:30)
+- 농가 일거리가 15:30에 끝나면, 16:00부터는 관광지 방문 가능
+- 관광지는 농가 일거리 종료 시간 이후 오후/저녁 시간대에 배치
+- 같은 지역 내에서 농가 일거리 → 관광지 순서로 자연스럽게 연결
+- 이동 시간을 충분히 고려 (지역 간 이동 1-2시간, 지역 내 이동 15-30분)
 - 점심 시간(12:00-13:00)은 반드시 확보
 
 응답은 반드시 다음 JSON 형식으로 제공하세요:
@@ -525,7 +548,7 @@ class IntelligentPlannerAgent:
         """사용자 활동 프로필 분석."""
         
         # 활동 성향 분석
-        activity_tags = user_preferences.get("activity_tags", [])
+        activity_tags = user_preferences.get("activity_style_tags", [])
         terrain_tags = user_preferences.get("terrain_tags", [])
         
         # 키워드 기반 성향 분석
@@ -778,6 +801,18 @@ class IntelligentPlannerAgent:
         except:
             return 8
     
+    def _parse_work_hours(self, work_hours: str) -> tuple:
+        """근무시간 문자열을 시작/종료 시간으로 파싱 (예: "08:00-15:00")."""
+        if not work_hours or work_hours == '':
+            return None, None
+        try:
+            if '-' in work_hours:
+                start, end = work_hours.split('-', 1)
+                return start.strip(), end.strip()
+        except:
+            pass
+        return None, None
+    
     def _calculate_date_range(self, slots: Dict[str, Any]) -> List[str]:
         """날짜 범위 계산."""
         start_date_str = slots.get("start_date", "")
@@ -816,6 +851,110 @@ class IntelligentPlannerAgent:
             current_date += timedelta(days=1)
         
         return date_range
+    
+    def recommend_additional_regional_tours(
+        self,
+        selected_jobs: List[JobPost],
+        selected_tours: List[TourSpot],
+        user_preferences: Dict[str, Any],
+        slots: Dict[str, Any]
+    ) -> List[TourSpot]:
+        """
+        선택된 카드들의 지역 내에서 추가 관광지를 추천합니다.
+        사용자 선호도와 벡터 유사도를 기반으로 추천합니다.
+        
+        Args:
+            selected_jobs: 선택된 농가 카드들
+            selected_tours: 선택된 관광지 카드들  
+            user_preferences: 사용자 선호도
+            slots: 추출된 슬롯 정보
+            
+        Returns:
+            추천된 추가 관광지 리스트
+        """
+        try:
+            print("🔍 지역 내 추가 관광지 추천 시작")
+            
+            # 선택된 카드들에서 지역 정보 추출
+            regions = set()
+            for job in selected_jobs:
+                if hasattr(job, 'region') and job.region:
+                    regions.add(job.region)
+            for tour in selected_tours:
+                if hasattr(tour, 'region') and tour.region:
+                    regions.add(tour.region)
+                    
+            if not regions:
+                print("❌ 지역 정보가 없어 추가 관광지 추천을 생략합니다.")
+                return []
+                
+            print(f"📍 대상 지역: {list(regions)}")
+            
+            # 이미 선택된 관광지 ID들
+            selected_tour_ids = {tour.id for tour in selected_tours}
+            
+            # 지역 내 모든 관광지 조회 (이미 선택된 것 제외)
+            from sqlalchemy import or_
+            regional_tours_query = self.db_session.query(TourSpot).filter(
+                or_(*[TourSpot.region.like(f"%{region}%") for region in regions]),
+                ~TourSpot.id.in_(selected_tour_ids)
+            )
+            
+            regional_tours = regional_tours_query.all()
+            print(f"🏞️ 지역 내 후보 관광지: {len(regional_tours)}개")
+            
+            if not regional_tours:
+                return []
+            
+            # 사용자 선호도 키워드 추출
+            preference_keywords = []
+            if user_preferences and 'keywords' in user_preferences:
+                preference_keywords.extend(user_preferences['keywords'])
+            if slots:
+                if slots.get('activity_tags'):
+                    preference_keywords.extend(slots['activity_tags'])
+                if slots.get('terrain_pref'):
+                    preference_keywords.extend(slots['terrain_pref'])
+                    
+            print(f"🏷️ 선호도 키워드: {preference_keywords}")
+            
+            # 키워드 매칭으로 후보 필터링
+            recommended_tours = []
+            for tour in regional_tours:
+                if hasattr(tour, 'tags') and tour.tags:
+                    # 태그 문자열을 리스트로 변환
+                    tour_tags = []
+                    if isinstance(tour.tags, str):
+                        tour_tags = [tag.strip() for tag in tour.tags.split(',')]
+                    elif isinstance(tour.tags, list):
+                        tour_tags = tour.tags
+                    
+                    # 키워드 매칭 점수 계산
+                    match_score = 0
+                    for keyword in preference_keywords:
+                        for tag in tour_tags:
+                            if keyword.lower() in tag.lower() or tag.lower() in keyword.lower():
+                                match_score += 1
+                                break
+                                
+                    if match_score > 0:
+                        recommended_tours.append((tour, match_score))
+            
+            # 점수 기준으로 정렬하고 상위 5개 선택
+            recommended_tours.sort(key=lambda x: x[1], reverse=True)
+            final_recommendations = [tour for tour, score in recommended_tours[:5]]
+            
+            print(f"✅ 추가 관광지 추천 완료: {len(final_recommendations)}개")
+            for tour in final_recommendations:
+                print(f"   - {tour.name} ({getattr(tour, 'region', '지역정보없음')})")
+                
+            return final_recommendations
+            
+        except Exception as e:
+            print(f"❌ 추가 관광지 추천 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
     
     def get_execution_logs(self) -> List[Dict[str, Any]]:
         """실행 로그 반환."""

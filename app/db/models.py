@@ -71,13 +71,22 @@ class JobPost(Base):
     __tablename__ = "jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String, nullable=False)
-    region: Mapped[str] = mapped_column(String, nullable=False)
-    tags: Mapped[str] = mapped_column(String, nullable=False)  # e.g. "조개잡이,갯벌체험"
+    title: Mapped[str] = mapped_column(String, nullable=False)  # 작업명
+    work_date: Mapped[str] = mapped_column(String, nullable=True)  # 작업 날짜 YYYY-MM-DD
+    work_hours: Mapped[str] = mapped_column(String, nullable=True)  # 근무시간 HH:MM-HH:MM
+    required_people: Mapped[str] = mapped_column(String, nullable=True)  # 필요 인원
+    region: Mapped[str] = mapped_column(String, nullable=False)  # 위치(지역)
+    address: Mapped[str] = mapped_column(String, nullable=True)  # 주소
+    crop_type: Mapped[str] = mapped_column(String, nullable=True)  # 작물
+    preference_condition: Mapped[str] = mapped_column(String, nullable=True)  # 선호조건
+    image_url: Mapped[str] = mapped_column(String, nullable=True)  # 이미지 URL
+    
+    # 기존 호환성 유지 필드들
+    tags: Mapped[str] = mapped_column(String, nullable=False)  # crop_type + preference_condition 조합
     lat: Mapped[float] = mapped_column(Float, nullable=True)
     lon: Mapped[float] = mapped_column(Float, nullable=True)
-    start_time: Mapped[str] = mapped_column(String, nullable=True)  # e.g. "08:00"
-    end_time: Mapped[str] = mapped_column(String, nullable=True)    # e.g. "17:00"
+    start_time: Mapped[str] = mapped_column(String, nullable=True)  # work_hours에서 추출
+    end_time: Mapped[str] = mapped_column(String, nullable=True)    # work_hours에서 추출
 
     # 1536차원 콘텐츠 벡터
     pref_vector: Mapped[list[float]] = Column(Vector(1536), nullable=True)
@@ -204,6 +213,69 @@ class AgentLog(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=True)
     error_message: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Accommodation(Base):
+    """숙박 정보 테이블 - TourAPI contentTypeId=32 데이터."""
+    
+    __tablename__ = "accommodations"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    region: Mapped[str] = mapped_column(String, nullable=False)
+    tags: Mapped[str] = mapped_column(String, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=True)
+    lon: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # TourAPI 관련 필드
+    contentid: Mapped[str] = mapped_column(String, nullable=True)
+    image_url: Mapped[str] = mapped_column(String, nullable=True)
+    
+    # 숙박 특화 정보
+    checkin_time: Mapped[str] = mapped_column(String, nullable=True)  # 체크인 시간
+    checkout_time: Mapped[str] = mapped_column(String, nullable=True)  # 체크아웃 시간
+    room_count: Mapped[str] = mapped_column(String, nullable=True)    # 객실 수
+    parking: Mapped[str] = mapped_column(String, nullable=True)       # 주차 정보
+    facilities: Mapped[str] = mapped_column(Text, nullable=True)      # 부대시설
+    
+    # 검색 키워드
+    detailed_keywords: Mapped[str] = mapped_column(Text, nullable=True)
+    keywords: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # 1536차원 콘텐츠 벡터
+    pref_vector: Mapped[list[float]] = Column(Vector(1536), nullable=True)
+
+
+class Restaurant(Base):
+    """음식점 정보 테이블 - TourAPI contentTypeId=39 데이터."""
+    
+    __tablename__ = "restaurants"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    region: Mapped[str] = mapped_column(String, nullable=False)
+    tags: Mapped[str] = mapped_column(String, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=True)
+    lon: Mapped[float] = mapped_column(Float, nullable=True)
+    
+    # TourAPI 관련 필드
+    contentid: Mapped[str] = mapped_column(String, nullable=True)
+    image_url: Mapped[str] = mapped_column(String, nullable=True)
+    
+    # 음식점 특화 정보
+    menu: Mapped[str] = mapped_column(Text, nullable=True)            # 대표메뉴
+    open_time: Mapped[str] = mapped_column(String, nullable=True)     # 영업시간
+    rest_date: Mapped[str] = mapped_column(String, nullable=True)     # 휴무일
+    parking: Mapped[str] = mapped_column(String, nullable=True)       # 주차 정보
+    reservation: Mapped[str] = mapped_column(String, nullable=True)   # 예약 정보
+    packaging: Mapped[str] = mapped_column(String, nullable=True)     # 포장 가능 여부
+    
+    # 검색 키워드
+    detailed_keywords: Mapped[str] = mapped_column(Text, nullable=True)
+    keywords: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # 1536차원 콘텐츠 벡터
+    pref_vector: Mapped[list[float]] = Column(Vector(1536), nullable=True)
 
 
 class Notification(Base):

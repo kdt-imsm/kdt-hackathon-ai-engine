@@ -333,6 +333,92 @@
         margin: 20px 0;
       }
 
+      .accommodations-restaurants-result {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 12px;
+        margin: 20px 0;
+        border-top: 3px solid #28a745;
+      }
+
+      .accommodation-cards,
+      .restaurant-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+        margin-top: 15px;
+      }
+
+      .acc-card,
+      .rest-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .acc-card:hover,
+      .rest-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .card-title {
+        font-weight: 600;
+        font-size: 1.1em;
+        color: #333;
+        margin-right: 10px;
+        flex: 1;
+      }
+
+      .card-distance {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 500;
+      }
+
+      .card-region {
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 8px;
+      }
+
+      .card-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-bottom: 10px;
+      }
+
+      .card-tag {
+        background: #f1f3f4;
+        color: #5f6368;
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 0.75em;
+      }
+
+      .card-details {
+        font-size: 0.85em;
+        color: #666;
+        line-height: 1.4;
+      }
+
+      .card-detail-item {
+        margin-bottom: 3px;
+      }
+
       .itinerary-content {
         background: white;
         padding: 20px;
@@ -359,6 +445,41 @@
 
       .feedback-btn.secondary {
         background: #6c757d;
+      }
+
+      /* 선호도 입력 스타일 */
+      .preference-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 8px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: white;
+        text-align: center;
+        font-size: 14px;
+      }
+
+      .preference-item:hover {
+        border-color: #667eea;
+        background: #f8f9ff;
+        transform: translateY(-1px);
+      }
+
+      .preference-item input[type="checkbox"] {
+        display: none;
+      }
+
+      .preference-item input[type="checkbox"]:checked + span {
+        color: white;
+      }
+
+      .preference-item:has(input[type="checkbox"]:checked) {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+        color: white;
       }
 
       .session-info {
@@ -405,7 +526,122 @@
 
       <div class="main-content">
         <!-- STEP 1: 자연어 입력 -->
-        <div class="step-container" id="step1">
+        <!-- 0단계: 사용자 선호도 설정 -->
+        <div class="step-container active" id="step0">
+          <div class="step-header">
+            <h3>0️⃣ 사용자 선호도 설정</h3>
+            <p>더 정확한 추천을 위해 선호도를 알려주세요.</p>
+          </div>
+
+          <!-- 1. 지형 선호도 -->
+          <div style="margin-bottom: 30px;">
+            <h4>🏔️ 어떤 풍경을 좋아하시나요?</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px;">
+              <label class="preference-item">
+                <input type="checkbox" name="terrain" value="산">
+                <span>🏔 산</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="terrain" value="바다">
+                <span>🌊 바다</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="terrain" value="강·호수">
+                <span>🏞 강·호수</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="terrain" value="숲">
+                <span>🌲 숲</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="terrain" value="섬">
+                <span>🏝 섬</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 2. 활동 스타일 -->
+          <div style="margin-bottom: 30px;">
+            <h4>🎯 어떤 여행 스타일을 선호하시나요?</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 15px;">
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="힐링·여유">
+                <span>💤 힐링·여유</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="체험형">
+                <span>🧑‍🍳 체험형</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="야외활동">
+                <span>🚴 야외활동</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="레저·액티비티">
+                <span>🎢 레저·액티비티</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="문화·역사">
+                <span>🏛 문화·역사</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="축제·이벤트">
+                <span>🎉 축제·이벤트</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="먹거리 탐방">
+                <span>🍴 먹거리 탐방</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="activity" value="사진 스팟">
+                <span>📸 사진 스팟</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 3. 일자리 종류 -->
+          <div style="margin-bottom: 30px;">
+            <h4>🌾 원하시는 일자리 종류를 알려주세요</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px;">
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="채소">
+                <span>🥬 채소</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="과수">
+                <span>🍎 과수</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="화훼">
+                <span>🌹 화훼</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="식량작물">
+                <span>🌾 식량작물</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="축산">
+                <span>🐄 축산</span>
+              </label>
+              <label class="preference-item">
+                <input type="checkbox" name="job" value="농기계">
+                <span>🚜 농기계</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 4. 추가 선호사항 -->
+          <div style="margin-bottom: 30px;">
+            <h4>💭 추가적인 정보를 알려주세요</h4>
+            <textarea id="preferenceDetails" 
+                      placeholder="예시: 뚜벅이 여행, 대중교통 이용, 시장 투어, 디저트 투어, 숨겨진 맛집 등"
+                      style="width: 100%; height: 80px; padding: 15px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; resize: vertical;"></textarea>
+          </div>
+
+          <button class="primary-btn" onclick="completePreferences()">✨ 선호도 설정 완료</button>
+        </div>
+
+        <div class="step-container" id="step1" style="display: none;">
           <div class="step-header">
             <div class="step-number">1</div>
             <div class="step-title">자연어 입력 및 슬롯 추출</div>
@@ -418,7 +654,7 @@
             <textarea
               id="userQuery"
               rows="3"
-              placeholder="예: 9월에 제주에서 농장 일거리 돕고 바다 구경하고 싶어"
+              placeholder="예: 9월 초에 전북 김제에서 일주일 정도 과수원 체험하면서 힐링하고 싶어. 곶감이나 사과 같은 과일 수확 도와드리고, 전통 시장이나 지평선 축제도 구경하고 싶어."
             ></textarea>
           </div>
           <button class="btn" onclick="extractSlots()">
@@ -566,7 +802,7 @@
                 class="feedback-btn secondary"
                 onclick="testItineraryFeedback('modify')"
               >
-                ✏️ 수정 요청 (테스트)
+                ✏️ 일정 수정하기
               </button>
               <button
                 class="feedback-btn secondary"
@@ -574,6 +810,29 @@
               >
                 🔄 다시 생성
               </button>
+            </div>
+          </div>
+
+          <!-- 숙박 및 음식점 추천 -->
+          <div
+            class="accommodations-restaurants-result"
+            id="accommodationsRestaurantsResult"
+            style="display: none"
+          >
+            <h4>🏨 추천 숙박시설 및 음식점</h4>
+            
+            <div class="cards-section">
+              <h5>🏨 근처 숙박시설</h5>
+              <div class="accommodation-cards" id="accommodationCards">
+                <p>숙박시설 정보를 불러오는 중...</p>
+              </div>
+            </div>
+
+            <div class="cards-section">
+              <h5>🍽️ 근처 음식점</h5>
+              <div class="restaurant-cards" id="restaurantCards">
+                <p>음식점 정보를 불러오는 중...</p>
+              </div>
             </div>
           </div>
         </div>
@@ -585,6 +844,30 @@
       let currentJobCards = [];
       let currentTourCards = [];
       let currentSessionId = null;
+      
+      // 사용자 선호도 저장
+      const userPreferences = {
+        terrain: [],
+        activity: [],
+        job: [],
+        preferenceDetails: ''
+      };
+
+      // STEP 0: 사용자 선호도 완료
+      function completePreferences() {
+        // 선택된 선호도 수집
+        userPreferences.terrain = Array.from(document.querySelectorAll('input[name="terrain"]:checked')).map(cb => cb.value);
+        userPreferences.activity = Array.from(document.querySelectorAll('input[name="activity"]:checked')).map(cb => cb.value);
+        userPreferences.job = Array.from(document.querySelectorAll('input[name="job"]:checked')).map(cb => cb.value);
+        userPreferences.preferenceDetails = document.getElementById('preferenceDetails').value.trim();
+
+        console.log('사용자 선호도:', userPreferences);
+
+        // step0 숨기고 step1 표시
+        document.getElementById('step0').style.display = 'none';
+        document.getElementById('step1').classList.add('active');
+        document.getElementById('step1').style.display = 'block';
+      }
 
       // STEP 1: 슬롯 추출 및 카드 검색
       async function extractSlots() {
@@ -605,10 +888,22 @@
           await animateProcess("process1-vector", 1500);
           await animateProcess("process1-ranking", 800);
 
+          // 선호도와 자연어 쿼리 결합
+          const combinedQuery = userPreferences.preferenceDetails 
+            ? `${query} ${userPreferences.preferenceDetails}`
+            : query;
+
           const response = await fetch("/slots", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query: query }),
+            body: JSON.stringify({ 
+              query: combinedQuery,
+              user_preferences: {
+                terrain_tags: userPreferences.terrain,
+                activity_style_tags: userPreferences.activity,
+                job_tags: userPreferences.job
+              }
+            }),
           });
 
           const data = await response.json();
@@ -783,14 +1078,29 @@
           await animateProcess("process3-personal", 2500);
           await animateProcess("process3-generate", 1000);
 
+          // 선호도와 자연어 쿼리 결합
+          const query = document.getElementById("userQuery").value;
+          const combinedQuery = userPreferences.preferenceDetails 
+            ? `${query} ${userPreferences.preferenceDetails}`
+            : query;
+
           const payload = {
-            query: document.getElementById("userQuery").value,
+            query: combinedQuery,
             user_id: null,
             budget: 500000,
             selected_jobs: selectedJobs,
             selected_tours: selectedTours,
+            user_preferences: {
+              terrain_tags: userPreferences.terrain,
+              activity_style_tags: userPreferences.activity,
+              job_tags: userPreferences.job
+            }
           };
 
+          console.log('📤 웹 UI에서 보내는 요청:');
+          console.log('   URL: /smart-schedule');
+          console.log('   Payload:', JSON.stringify(payload, null, 2));
+          
           const response = await fetch("/smart-schedule", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -824,6 +1134,16 @@
             document.getElementById("optimizedDays").textContent =
               scheduleLines || 0;
 
+            // 숙박 및 음식점 카드 표시
+            console.log('🔍 API 응답 디버깅:');
+            console.log('   data.success:', data.success);
+            console.log('   data.accommodations:', data.accommodations);
+            console.log('   data.restaurants:', data.restaurants);
+            console.log('   accommodations 길이:', data.accommodations ? data.accommodations.length : 'undefined');
+            console.log('   restaurants 길이:', data.restaurants ? data.restaurants.length : 'undefined');
+            
+            displayAccommodationsRestaurants(data.accommodations || [], data.restaurants || []);
+
             setStepStatus(3, "completed");
           } else {
             throw new Error(data.error_message || "일정 생성 실패");
@@ -847,16 +1167,32 @@
         let modifications = [];
 
         if (type === "modify") {
-          // 테스트용 수정사항
-          modifications = [
-            {
-              type: "change_time",
-              date: "2025-09-01",
-              activity_id: "1",
-              new_start_time: "10:00",
-              new_end_time: "15:00",
-            },
+          // PERSONA_1 맞춤 수정사항 예시들
+          const modificationExamples = [
+            "곶감 체험 말고 사과 수확도 해보고 싶어. 다른 과수원 체험은 또 뭐가 있어?",
+            "첫날 너무 바빠 보여. 좀 더 여유롭게 하루 일정 짜줘.",
+            "전주 한옥마을 대신 김제 지평선 축제 구경하고 싶어.",
+            "농장 체험 시간을 더 늘리고 관광은 줄여줘.",
+            "저녁 시간에 로컬 맛집 추천도 넣어줘."
           ];
+          
+          // 랜덤하게 하나 선택하거나 사용자 입력 받기
+          const userFeedback = prompt(
+            "어떻게 일정을 수정하고 싶으신가요?\n\n예시:\n" +
+            modificationExamples.join("\n") + "\n\n직접 입력:",
+            modificationExamples[Math.floor(Math.random() * modificationExamples.length)]
+          );
+          
+          if (userFeedback) {
+            modifications = [
+              {
+                type: "natural_language_feedback",
+                feedback: userFeedback
+              }
+            ];
+          } else {
+            return; // 사용자가 취소한 경우
+          }
         } else if (type === "regenerate") {
           // 전체 재생성 (빈 수정사항으로 재최적화 요청)
           modifications = [];
@@ -930,11 +1266,104 @@
         }
       }
 
+      // 숙박 및 음식점 카드 표시 함수
+      function displayAccommodationsRestaurants(accommodations, restaurants) {
+        console.log('🏨 displayAccommodationsRestaurants 호출됨');
+        console.log('   accommodations 타입:', typeof accommodations);
+        console.log('   accommodations 길이:', accommodations.length);
+        console.log('   accommodations 데이터:', accommodations);
+        console.log('   restaurants 타입:', typeof restaurants);
+        console.log('   restaurants 길이:', restaurants.length);
+        console.log('   restaurants 데이터:', restaurants);
+        
+        // 숙박시설 카드 렌더링
+        const accommodationContainer = document.getElementById('accommodationCards');
+        if (accommodations.length > 0) {
+          accommodationContainer.innerHTML = '';
+          accommodations.forEach(acc => {
+            const card = createAccommodationCard(acc);
+            accommodationContainer.appendChild(card);
+          });
+        } else {
+          accommodationContainer.innerHTML = '<p>근처에 추천할 숙박시설이 없습니다.</p>';
+        }
+
+        // 음식점 카드 렌더링
+        const restaurantContainer = document.getElementById('restaurantCards');
+        if (restaurants.length > 0) {
+          restaurantContainer.innerHTML = '';
+          restaurants.forEach(rest => {
+            const card = createRestaurantCard(rest);
+            restaurantContainer.appendChild(card);
+          });
+        } else {
+          restaurantContainer.innerHTML = '<p>근처에 추천할 음식점이 없습니다.</p>';
+        }
+
+        // 숙박/음식점 결과 섹션 표시
+        document.getElementById('accommodationsRestaurantsResult').style.display = 'block';
+      }
+
+      // 숙박시설 카드 생성
+      function createAccommodationCard(acc) {
+        const card = document.createElement('div');
+        card.className = 'acc-card';
+        
+        const tags = Array.isArray(acc.tags) ? acc.tags : (acc.tags ? acc.tags.split(',') : []);
+        const tagsHtml = tags.map(tag => `<span class="card-tag">${tag.trim()}</span>`).join('');
+        
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-title">${acc.name}</div>
+            <div class="card-distance">${acc.distance}km</div>
+          </div>
+          <div class="card-region">${acc.region}</div>
+          <div class="card-tags">${tagsHtml}</div>
+          <div class="card-details">
+            ${acc.checkin_time && acc.checkin_time !== 'NaN' ? `<div class="card-detail-item">체크인: ${acc.checkin_time}</div>` : ''}
+            ${acc.checkout_time && acc.checkout_time !== 'NaN' ? `<div class="card-detail-item">체크아웃: ${acc.checkout_time}</div>` : ''}
+            ${acc.room_count && acc.room_count !== 'NaN' ? `<div class="card-detail-item">객실 수: ${acc.room_count}</div>` : ''}
+            ${acc.parking && acc.parking !== 'NaN' ? `<div class="card-detail-item">주차: ${acc.parking}</div>` : ''}
+            ${acc.facilities && acc.facilities !== 'NaN' ? `<div class="card-detail-item">시설: ${acc.facilities}</div>` : ''}
+          </div>
+        `;
+        
+        return card;
+      }
+
+      // 음식점 카드 생성
+      function createRestaurantCard(rest) {
+        const card = document.createElement('div');
+        card.className = 'rest-card';
+        
+        const tags = Array.isArray(rest.tags) ? rest.tags : (rest.tags ? rest.tags.split(',') : []);
+        const tagsHtml = tags.map(tag => `<span class="card-tag">${tag.trim()}</span>`).join('');
+        
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-title">${rest.name}</div>
+            <div class="card-distance">${rest.distance}km</div>
+          </div>
+          <div class="card-region">${rest.region}</div>
+          <div class="card-tags">${tagsHtml}</div>
+          <div class="card-details">
+            ${rest.menu && rest.menu !== 'NaN' ? `<div class="card-detail-item">메뉴: ${rest.menu}</div>` : ''}
+            ${rest.open_time && rest.open_time !== 'NaN' ? `<div class="card-detail-item">영업시간: ${rest.open_time}</div>` : ''}
+            ${rest.rest_date && rest.rest_date !== 'NaN' ? `<div class="card-detail-item">휴무일: ${rest.rest_date}</div>` : ''}
+            ${rest.parking && rest.parking !== 'NaN' ? `<div class="card-detail-item">주차: ${rest.parking}</div>` : ''}
+            ${rest.reservation && rest.reservation !== 'NaN' ? `<div class="card-detail-item">예약: ${rest.reservation}</div>` : ''}
+            ${rest.packaging && rest.packaging !== 'NaN' ? `<div class="card-detail-item">포장: ${rest.packaging}</div>` : ''}
+          </div>
+        `;
+        
+        return card;
+      }
+
       // 초기화
       document.addEventListener("DOMContentLoaded", function () {
         // 예시 쿼리 설정
         document.getElementById("userQuery").value =
-          "9월에 제주에서 농장 일거리 돕고 바다 구경하고 싶어";
+          "9월 초에 전북 김제에서 일주일 정도 과수원 체험하면서 힐링하고 싶어. 곶감이나 사과 같은 과일 수확 도와드리고, 전통 시장이나 지평선 축제도 구경하고 싶어.";
       });
     </script>
   </body>

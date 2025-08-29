@@ -188,6 +188,49 @@ def calculate_tag_overlap(tags1: List[str], tags2: List[str]) -> float:
     return intersection / union if union > 0 else 0.0
 
 
+def create_user_profile_from_preferences(
+    user_query: str,
+    terrain_tags: List[str],
+    activity_tags: List[str],
+    job_tags: List[str]
+) -> Dict:
+    """
+    사용자가 직접 입력한 선호도로 사용자 프로필을 생성합니다.
+    
+    Parameters
+    ----------
+    user_query : str
+        사용자의 자연어 입력
+    terrain_tags : List[str]
+        지형 선호도 태그 (1단계)
+    activity_tags : List[str]
+        활동 스타일 태그 (2단계)
+    job_tags : List[str]
+        농업 일자리 종류 태그 (3단계)
+        
+    Returns
+    -------
+    Dict
+        사용자 프로필 정보
+    """
+    from app.embeddings.embedding_service import embed_texts
+    
+    # 모든 선호도를 조합하여 벡터 생성
+    combined_preferences = terrain_tags + activity_tags + job_tags
+    combined_text = f"{user_query} {' '.join(combined_preferences)}"
+    
+    user_vector = embed_texts([combined_text])[0]
+    
+    return {
+        'user_id': 1,  # 실시간 사용자
+        'terrain_tags': terrain_tags,
+        'activity_tags': activity_tags,
+        'job_tags': job_tags,
+        'combined_preferences': combined_preferences,
+        'user_vector': user_vector,
+        'query': user_query
+    }
+
 def get_best_matching_user(
     user_query: str,
     activity_tags: List[str],

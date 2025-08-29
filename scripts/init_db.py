@@ -52,7 +52,7 @@ from app.embeddings.embedding_service import embed_texts
 # 상수: 더미 CSV 파일 경로 (일거리 데이터)
 # --------------------------------------------------------------------------- #
 CSV_JOBS = Path("data/dummy_jobs.csv")
-CSV_TOURS = Path("data/tour_api_with_keywords.csv")  # 키워드가 포함된 전체 데이터 사용
+CSV_TOURS = Path("data/tour_api_attractions.csv")  # 관광지 데이터 사용
 
 
 def upsert_from_df(df: pd.DataFrame, model, db: Session):
@@ -135,20 +135,136 @@ if __name__ == "__main__":
     # ------------------- 3) dummy_jobs.csv UPSERT --------------------------- #
     print("▶ dummy_jobs.csv 로 일거리 UPSERT 중...")
     jobs_df = pd.read_csv(CSV_JOBS)
-    # CSV의 job_id 컬럼을 데이터베이스 모델의 id 컬럼에 매핑
+    
+    # CSV 파일은 이미 올바른 영문 컬럼명을 사용하므로 매핑 불필요
+    # 필요한 컬럼들이 모두 존재하는지 확인
+    required_columns = ['title', 'work_date', 'work_hours', 'required_people', 'region', 'address', 'crop_type', 'preference_condition', 'image_url']
+    missing_columns = [col for col in required_columns if col not in jobs_df.columns]
+    if missing_columns:
+        print(f"❌ CSV 파일에 필수 컬럼이 없습니다: {missing_columns}")
+        print(f"📋 CSV 실제 컬럼: {list(jobs_df.columns)}")
+        raise ValueError(f"CSV 파일 구조가 올바르지 않습니다: {missing_columns}")
+    
+    print(f"✅ CSV 파일 구조 확인 완료: {len(jobs_df)} 레코드, {len(jobs_df.columns)} 컬럼")
+    
+    # 근무시간에서 start_time, end_time 추출
+    def parse_work_hours(work_hours):
+        if pd.isna(work_hours) or work_hours == '':
+            return None, None
+        try:
+            if '-' in str(work_hours):
+                start, end = str(work_hours).split('-', 1)
+                return start.strip(), end.strip()
+        except:
+            pass
+        return None, None
+    
+    if 'work_hours' in jobs_df.columns:
+        jobs_df[['start_time', 'end_time']] = jobs_df['work_hours'].apply(
+            lambda x: pd.Series(parse_work_hours(x))
+        )
+    
+    # tags 필드 생성 (crop_type + preference_condition 조합)
+    if 'crop_type' in jobs_df.columns and 'preference_condition' in jobs_df.columns:
+        jobs_df['tags'] = jobs_df.apply(
+            lambda row: f"{row.get('crop_type', '')} {row.get('preference_condition', '')}".strip(),
+            axis=1
+        )
+    elif 'tags' not in jobs_df.columns:
+        jobs_df['tags'] = '농업 체험'  # 기본값
+    
+    # id 컬럼 처리
     if 'job_id' in jobs_df.columns:
         jobs_df = jobs_df.rename(columns={'job_id': 'id'})
+    elif 'id' not in jobs_df.columns:
+        jobs_df = jobs_df.reset_index()
+        jobs_df = jobs_df.rename(columns={'index': 'id'})
+        jobs_df['id'] = jobs_df['id'] + 1
+    
+    # 좌표 정보 생성 (지역 기반)
+    from app.utils.location import get_coordinates_from_region
+    
+    if 'lat' not in jobs_df.columns or 'lon' not in jobs_df.columns:
+        print("   🌍 지역 기반 좌표 생성 중...")
+        coordinates = []
+        
+        for _, row in jobs_df.iterrows():
+            region = row.get('region', '')
+            lat, lon = get_coordinates_from_region(region)
+            coordinates.append({'lat': lat, 'lon': lon})
+        
+        coords_df = pd.DataFrame(coordinates)
+        jobs_df['lat'] = coords_df['lat']
+        jobs_df['lon'] = coords_df['lon']
+        
+        print(f"   ✅ 좌표 생성 완료: 유효한 좌표 {sum(jobs_df['lat'].notna())}개")
+    else:
+        print("   ✅ 기존 좌표 정보 사용")
+    
     upsert_from_df(jobs_df, models.JobPost, db)
 
-    # ------------------- 3-2) tour_api.csv UPSERT --------------------------- #
-    print("▶ tour_api.csv 로 관광지 UPSERT 중...")
-    tours_df = pd.read_csv(CSV_TOURS)
-    # tour_api.csv는 id 컬럼이 없으므로 인덱스를 id로 사용
-    tours_df = tours_df.reset_index()
-    tours_df = tours_df.rename(columns={'index': 'id'})
-    # id는 1부터 시작하도록 조정
-    tours_df['id'] = tours_df['id'] + 1
-    upsert_from_df(tours_df, models.TourSpot, db)
+    # ------------------- 3-2) 관광지 CSV 통합 로드 --------------------------- #
+    print("▶ 관광지 데이터 통합 로드 중...")
+    
+    # 사용 가능한 관광지 CSV 파일들
+    tour_files = [
+        "data/tour_api_attractions.csv",
+        "data/tour_api_cultural.csv", 
+        "data/tour_api_festivals.csv",
+        "data/tour_api_courses.csv",
+        "data/tour_api_leisure.csv",
+        "data/tour_api_shopping.csv"
+    ]
+    
+    all_tours_df = pd.DataFrame()
+    
+    for file_path in tour_files:
+        if Path(file_path).exists():
+            try:
+                df = pd.read_csv(file_path)
+                print(f"   ✅ {Path(file_path).name}: {len(df)}건 로드")
+                all_tours_df = pd.concat([all_tours_df, df], ignore_index=True)
+            except Exception as e:
+                print(f"   ⚠️ {Path(file_path).name} 로드 실패: {e}")
+        else:
+            print(f"   ❌ {Path(file_path).name} 파일 없음")
+    
+    if len(all_tours_df) > 0:
+        # 데이터 정제: TourSpot 모델과 일치시키기
+        print("   🔧 데이터 스키마 정리 중...")
+        
+        # 필수 컬럼만 추출 (TourSpot 모델에 맞게)
+        required_columns = ['name', 'region', 'tags', 'lat', 'lon', 'contentid', 'image_url', 'detailed_keywords', 'keywords']
+        
+        # 존재하는 컬럼만 유지
+        available_columns = [col for col in required_columns if col in all_tours_df.columns]
+        clean_tours_df = all_tours_df[available_columns].copy()
+        
+        # 누락된 컬럼 기본값으로 채우기
+        for col in required_columns:
+            if col not in clean_tours_df.columns:
+                if col in ['detailed_keywords']:
+                    clean_tours_df[col] = "[]"
+                elif col in ['keywords', 'image_url']:
+                    clean_tours_df[col] = ""
+                else:
+                    clean_tours_df[col] = None
+        
+        # id 컬럼 추가 (인덱스 기반)
+        clean_tours_df = clean_tours_df.reset_index()
+        clean_tours_df = clean_tours_df.rename(columns={'index': 'id'})
+        clean_tours_df['id'] = clean_tours_df['id'] + 1
+        
+        # 중복 행 제거 (contentid 기준)
+        if 'contentid' in clean_tours_df.columns:
+            clean_tours_df = clean_tours_df.drop_duplicates(subset=['contentid'], keep='first')
+        
+        print(f"   📊 정제된 관광지 데이터: {len(clean_tours_df)}건")
+        print(f"   📋 사용 컬럼: {list(clean_tours_df.columns)}")
+        
+        upsert_from_df(clean_tours_df, models.TourSpot, db)
+    else:
+        print("   ❌ 로드할 관광지 데이터가 없습니다.")
 
     # --------------------- 4) JobPost 임베딩 갱신 --------------------------- #
     print("▶ 일거리 embedding 갱신 중...")
@@ -188,12 +304,65 @@ if __name__ == "__main__":
     db.commit()
     print("✅ 관광지 임베딩 갱신 완료 (키워드 포함)")
 
-    # ----------------- 6) 더미 사용자 선호 태그 로딩 ------------------------ #
+    # ----------------- 6) 숙박·음식점 데이터 로딩 --------------------------- #
+    print("▶ 숙박·음식점 데이터 로딩 중...")
+    
+    # 숙박 데이터
+    accommodations_file = Path("data/accommodations.csv")
+    if accommodations_file.exists():
+        try:
+            acc_df = pd.read_csv(accommodations_file)
+            acc_df = acc_df.reset_index()
+            acc_df = acc_df.rename(columns={'index': 'id'})
+            acc_df['id'] = acc_df['id'] + 1
+            upsert_from_df(acc_df, models.Accommodation, db)
+            print(f"   ✅ 숙박시설: {len(acc_df)}건 로드")
+        except Exception as e:
+            print(f"   ⚠️ 숙박시설 로드 실패: {e}")
+    else:
+        print("   ❌ accommodations.csv 파일 없음")
+    
+    # 음식점 데이터
+    restaurants_file = Path("data/restaurants.csv")
+    if restaurants_file.exists():
+        try:
+            rest_df = pd.read_csv(restaurants_file)
+            rest_df = rest_df.reset_index()
+            rest_df = rest_df.rename(columns={'index': 'id'})
+            rest_df['id'] = rest_df['id'] + 1
+            upsert_from_df(rest_df, models.Restaurant, db)
+            print(f"   ✅ 음식점: {len(rest_df)}건 로드")
+        except Exception as e:
+            print(f"   ⚠️ 음식점 로드 실패: {e}")
+    else:
+        print("   ❌ restaurants.csv 파일 없음")
+    
+    # 숙박·음식점 임베딩 생성
+    print("▶ 숙박·음식점 임베딩 생성 중...")
+    
+    # 숙박시설 임베딩
+    acc_rows = db.query(models.Accommodation).all()
+    refresh_embeddings(db, acc_rows, attr_name="tags")
+    
+    # 음식점 임베딩
+    rest_rows = db.query(models.Restaurant).all()
+    refresh_embeddings(db, rest_rows, attr_name="tags")
+    
+    print("✅ 숙박·음식점 임베딩 완료")
+
+    # ----------------- 7) 더미 사용자 선호 태그 로딩 ------------------------ #
     print("▶ 더미 사용자 선호 태그 로딩 중...")
-    # 순환 import 방지를 위한 지연 import
-    from app.db.crud import load_dummy_preferences
-    load_dummy_preferences(db, "data/dummy_prefer.csv")
-    print("✅ 더미 선호 태그 로딩 완료")
+    dummy_prefer_file = Path("data/dummy_prefer.csv")
+    if dummy_prefer_file.exists():
+        try:
+            # 순환 import 방지를 위한 지연 import
+            from app.db.crud import load_dummy_preferences
+            load_dummy_preferences(db, "data/dummy_prefer.csv")
+            print("✅ 더미 선호 태그 로딩 완료")
+        except Exception as e:
+            print(f"⚠️ 더미 선호 태그 로딩 실패: {e}")
+    else:
+        print("❌ dummy_prefer.csv 파일 없음 (건너뛰기)")
 
     # 세션 종료
     db.close()

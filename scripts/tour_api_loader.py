@@ -1,33 +1,20 @@
 """
-tour_api_loader.py
-==================
-한국관광공사_국문 관광정보 서비스(GW) → areaBasedList(※ 숫자 없음) 호출
-→ 관광지(TourSpot) 테이블 적재 + 태그(pref_vector) 임베딩
+tour_api_loader.py (개선 버전)
+==============================
+한국관광공사_국문 관광정보 서비스(GW) → contentTypeId별 분리 수집
 
 ❶ .env 에 반드시 두 변수를 넣어 주세요
    TOUR_BASE_URL=https://apis.data.go.kr/B551011/KorService2
    TOUR_API_KEY=발급받은키
-❷ 일자리 더미를 먼저 넣었다면
-   python -m scripts.tour_api_loader        # 관광지 실데이터 수집
-   python -m scripts.init_db                # 태그 임베딩 재계산
-"""
+❷ 실행 방법:
+   python -m scripts.tour_api_loader        # contentType별 분리 수집
+   python -m scripts.init_db                # 임베딩 재계산
 
-# ---------------------------------------------------------------------------
-# File Path : scripts/tour_api_loader.py
-# Description:
-#     • 한국관광공사 TourAPI(국문 관광정보 서비스 v2)의 `areaBasedList2` 엔드포인트를
-#       호출하여 전국(또는 지역) 관광지 목록을 페이지 단위로 수집합니다.
-#     • 응답 JSON을 정규화하여 `TourSpot` ORM 모델에 INSERT/UPSERT 하고,
-#       관광지 카테고리(cat1)에 따라 간단한 태그 문자열을 생성합니다.
-#     • `app.embeddings.embedding_service.embed_texts` 를 사용해 태그를 OpenAI
-#       Embedding 벡터로 변환한 뒤 `pref_vector` 필드에 저장합니다.
-#     • 호출 빈도를 제한하기 위해 페이지 간 0.2초 슬립, 오류 시 지수 백오프 등
-#       기본적인 오류/재시도 로직을 포함합니다.
-#
-# Usage:
-#     $ python -m scripts.tour_api_loader          # 관광지 실데이터 수집
-#     이후 `python -m scripts.init_db` 로 임베딩 재계산 가능
-# ---------------------------------------------------------------------------
+주요 개선사항:
+- contentTypeId별 개별 CSV 파일 생성
+- 각 파일이 어떤 데이터인지 직관적 파일명
+- 개발 과정에서 데이터 추적 용이
+"""
 
 from __future__ import annotations
 import httpx, pandas as pd, time
@@ -48,70 +35,190 @@ CLIENT = httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0))
 
 # 환경설정 로드 (.env → Pydantic Settings)
 settings = get_settings()
+
+# contentTypeId별 파일명 매핑
+CONTENT_TYPE_FILES = {
+    12: "tour_api_attractions.csv",      # 관광지 (기존 tour_api_with_keywords.csv와 동일)
+    14: "tour_api_cultural.csv",         # 문화시설
+    15: "tour_api_festivals.csv",        # 축제/공연/행사  
+    25: "tour_api_courses.csv",          # 여행코스
+    28: "tour_api_leisure.csv",          # 레포츠
+    38: "tour_api_shopping.csv",         # 쇼핑
+    32: "tour_api_accommodations.csv",   # 숙박 (별도 스크립트)
+    39: "tour_api_restaurants.csv"       # 음식점 (별도 스크립트)
+}
+
 BASE_URL: str = settings.tour_base_url.rstrip("/")          # KorService2 베이스 URL
 SERVICE_KEY: str = settings.tour_api_key                     # 개인 인증키
 
-# ─────────────────────────────────────────────────────────────
-# TourAPI 기본 쿼리 파라미터 (공통)
-# ─────────────────────────────────────────────────────────────
-DEFAULT_PARAMS = dict(
-    MobileOS="ETC",           # 필수 값 (안드로이드/iOS 구분無)
-    MobileApp="ruralplanner", # 임의 App명
-    contentTypeId=12,          # 관광지(12) / 문화시설(14) / 축제공연행사(15) …
-    # contentTypeId=None,      # ← None이면 모든 분류
-    arrange="O",             # 대표이미지 여부 정렬 (O:제목순)
-    numOfRows=100,            # 페이지 당 최대 100건
-    areaCode=None,            # 0 또는 None = 전국
-    _type="json",           # JSON 응답
-)
+print(f"🔧 환경 설정 확인:")
+print(f"   BASE_URL: {BASE_URL}")
+print(f"   SERVICE_KEY: {'*' * 10}{SERVICE_KEY[-10:] if len(SERVICE_KEY) > 10 else SERVICE_KEY}")
+print()
 
 # ─────────────────────────────────────────────────────────────
-# API 호출 유틸리티
+# API 호출 & 페이지네이션
 # ─────────────────────────────────────────────────────────────
 
-def fetch_area_list(page: int = 1) -> tuple[list[dict], int]:
-    """단일 페이지(`pageNo`) 관광지 목록을 반환합니다.
+# API 공통 파라미터 (listYN 제거)
+DEFAULT_PARAMS = {
+    "serviceKey": SERVICE_KEY,
+    "MobileOS": "ETC",
+    "MobileApp": "KDT-AgricultureTourApp",
+    "_type": "json",
+    "arrange": "A",     # 제목 순 정렬  
+    "numOfRows": 100,   # 페이지당 100개
+    "pageNo": 1
+}
 
-    • API 응답의 `items` 필드 형태가 dict/list/str/None 등 다양하므로
-      모든 케이스를 안전하게 처리하여 list[dict] 형태로 변환합니다.
-    • 네트워크 장애 또는 5xx 응답 시 지수 백오프로 최대 5회 재시도 후 실패.
+def fetch_area_list(
+    page: int = 1,
+    contentTypeId=None,        # None이면 모든 분류 수집
+    areaCode=None,
+    sigunguCode=None,
+    max_retries: int = 3
+) -> tuple[list[dict], int]:
+    """areaBasedList2 API 호출 (페이지별)."""
     
-    Returns:
-        tuple: (items 리스트, totalCount)
-    """
-    params = {**DEFAULT_PARAMS, "pageNo": page, "serviceKey": SERVICE_KEY}
+    params = DEFAULT_PARAMS.copy()
+    params["pageNo"] = page
+    
+    if areaCode:
+        params["areaCode"] = areaCode
+    if sigunguCode:
+        params["sigunguCode"] = sigunguCode
+    if contentTypeId:
+        params["contentTypeId"] = contentTypeId
+
     url = f"{BASE_URL}/areaBasedList2"
-
-    for attempt in range(5):        # 최대 5회 재시도
+    
+    for attempt in range(max_retries):
         try:
-            r = CLIENT.get(url, params=params)
-            r.raise_for_status()
-            body = r.json()["response"]["body"]
-            total_count = int(body.get("totalCount", 0))
-            print(f"DEBUG 페이지 {page}: 총 {total_count}개 중 현재 페이지 데이터 처리")
+            print(f"   📡 API 호출: 페이지 {page} (시도 {attempt + 1}/{max_retries})")
+            response = CLIENT.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            
+            # 응답 내용 디버깅
+            response_text = response.text.strip()
+            if not response_text:
+                print(f"   ⚠️ 빈 응답 받음 (페이지 {page})")
+                return [], 0
+                
+            if not response_text.startswith('{'):
+                print(f"   ⚠️ JSON이 아닌 응답 받음 (페이지 {page}): {response_text[:200]}...")
+                return [], 0
+            
+            data = response.json()
+            
+            # 디버깅: API 응답 구조 출력
+            print(f"   🔍 API 응답 구조: {json.dumps(data, ensure_ascii=False, indent=2)[:500]}...")
+            
+            # TourAPI 응답 구조 파싱
+            if "response" not in data:
+                print(f"   ❌ 응답에 'response' 키가 없습니다: {data}")
+                return [], 0
+                
+            response_data = data["response"]
+            print(f"   📋 response 데이터: {response_data}")
+            
+            header = response_data.get("header", {})
+            print(f"   📄 header: {header}")
+            
+            body = response_data.get("body", {})
+            if not body or body.get("totalCount", 0) == 0:
+                print(f"   ⚠️ body가 없거나 totalCount가 0입니다: {body}")
+                return [], 0
+            
+            items = body.get("items", {})
+            if not items:
+                return [], body.get("totalCount", 0)
+                
+            item_list = items.get("item", [])
+            if not isinstance(item_list, list):
+                item_list = [item_list]  # 단일 아이템을 리스트로 변환
+                
+            total_count = body.get("totalCount", len(item_list))
+            return item_list, total_count
+            
+        except Exception as e:
+            print(f"   ❌ API 호출 실패 (시도 {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # 지수 백오프
+            else:
+                raise e
 
-            # ── items 필드가 dict·list·str 세 경우 모두 처리 ──
-            items_field = body.get("items")
-            if not items_field:                 # None · ""  → 데이터 없음
-                return [], total_count
-            if isinstance(items_field, dict):
-                raw_items = items_field.get("item", [])
-                items = raw_items if isinstance(raw_items, list) else [raw_items]
-                return items, total_count
-            if isinstance(items_field, list):
-                return items_field, total_count
-            # 문자열이면(오류 메시지·빈 XML 등) → 빈 목록
-            return [], total_count
+    return [], 0
 
-        except (httpx.TimeoutException, httpx.HTTPStatusError) as e:
-            # 지수 백오프: 1s → 2s → 4s …
-            wait = 2 ** attempt
-            print(f"⚠️  {type(e).__name__} {e} … {wait}s 후 재시도")
-            time.sleep(wait)
+def generate_tags_by_content_type(content_type_id, cat1):
+    """contentTypeId와 cat1에 따라 적절한 태그를 생성합니다."""
+    tags = []
+    
+    # contentTypeId별 태그 매핑
+    type_mapping = {
+        12: "관광지",
+        14: "문화시설", 
+        15: "축제",
+        25: "여행코스",
+        28: "레포츠",
+        38: "쇼핑",
+        32: "숙박",
+        39: "음식점"
+    }
+    
+    if content_type_id and int(content_type_id) in type_mapping:
+        tags.append(type_mapping[int(content_type_id)])
+    
+    # cat1 분류별 세부 태그
+    if cat1:
+        cat1_mapping = {
+            "A01": "자연",
+            "A02": "인문",
+            "A03": "레포츠", 
+            "A04": "쇼핑",
+            "A05": "음식",
+            "B02": "숙박",
+            "C01": "추천코스"
+        }
+        if cat1 in cat1_mapping:
+            tags.append(cat1_mapping[cat1])
+    
+    return ",".join(tags) if tags else "기타"
 
-    # 최대 재시도 초과 시 예외
-    raise RuntimeError("TourAPI 요청 반복 실패")
+def to_dataframe(tour_items: list[dict]) -> pd.DataFrame:
+    """TourAPI 응답을 DataFrame으로 변환."""
+    rows = []
+    
+    for it in tour_items:
+        # 좌표 변환 (문자열 → float)
+        try:
+            longitude = float(it.get("mapx", 0)) if it.get("mapx") else None
+            latitude = float(it.get("mapy", 0)) if it.get("mapy") else None
+        except (ValueError, TypeError):
+            longitude = None
+            latitude = None
+        
+        rows.append(
+            dict(
+                # TourSpot 모델 필드와 일치
+                id=None,                                         # 자동 증가
+                name=it.get("title", "제목없음"),
+                region=it.get("addr1", "주소없음"),
+                lat=latitude,                                   # latitude → lat
+                lon=longitude,                                  # longitude → lon
+                contentid=it.get("contentid", ""),           # TourAPI contentid
+                # contentTypeId에 따른 태그 생성
+                tags=generate_tags_by_content_type(it.get("contenttypeid"), it.get("cat1")),
+                image_url=None,                                 # 기본값
+                detailed_keywords="[]",                         # 기본값
+                keywords=None                                   # 기본값
+            )
+        )
+    
+    return pd.DataFrame(rows)
 
+# ─────────────────────────────────────────────────────────────
+# 이미지 수집 함수
+# ─────────────────────────────────────────────────────────────
 
 def fetch_detail_image(contentid: str) -> str | None:
     """TourAPI detailImage2 엔드포인트로 관광지 이미지 URL을 가져옵니다.
@@ -132,7 +239,7 @@ def fetch_detail_image(contentid: str) -> str | None:
     params = {
         "serviceKey": SERVICE_KEY,
         "MobileOS": "ETC",
-        "MobileApp": "ruralplanner",
+        "MobileApp": "KDT-AgricultureTourApp",
         "contentId": contentid,
         "imageYN": "Y",
         "numOfRows": 1,  # 대표 이미지 1개만
@@ -167,173 +274,201 @@ def fetch_detail_image(contentid: str) -> str | None:
         
     return None
 
-
-def collect_detailed_keywords(contentid_list: List[str]) -> Dict[str, List[str]]:
-    """관광지 contentid들에 대해 키워드 검색을 수행하여 상세 키워드 수집"""
-    print("🔍 상세 키워드 수집을 시작합니다...")
-    
-    # 검색할 키워드 후보 목록 (자연어 슬롯 추출에서 자주 사용되는 키워드들)
-    candidate_keywords = [
-        # 자연 관련
-        "산", "바다", "호수", "강", "폭포", "계곡", "숲", "공원", "해변", "섬",
-        "온천", "수목원", "정원", "꽃", "단풍", "벚꽃", "동굴", "절벽", "습지",
-        
-        # 문화 관련  
-        "문화재", "사찰", "교회", "궁궐", "한옥", "전통", "역사", "박물관", "미술관",
-        "전시관", "기념관", "유적지", "문화마을", "벽화", "조각상",
-        
-        # 활동 관련
-        "체험", "축제", "공연", "전시", "워크숍", "만들기", "요리", "농장", "목장",
-        "낚시", "수상스포츠", "등산", "하이킹", "캠핑", "펜션", "리조트",
-        
-        # 특수 테마
-        "야경", "일출", "일몰", "별", "드라마촬영지", "영화촬영지", "포토존",
-        "인스타그렘", "맛집", "카페", "시장", "쇼핑", "기념품"
-    ]
-    
-    keyword_service = get_keyword_service()
-    
-    # 키워드별로 검색하여 contentid 매핑 수집
-    contentid_to_keywords = {}
-    
-    for keyword in candidate_keywords:
-        print(f"   키워드 '{keyword}' 검색 중...")
-        try:
-            search_results = keyword_service.search_by_keyword(keyword, max_results=200)
-            
-            for result in search_results:
-                if result.contentid in contentid_list:
-                    if result.contentid not in contentid_to_keywords:
-                        contentid_to_keywords[result.contentid] = []
-                    contentid_to_keywords[result.contentid].append(keyword)
-            
-            time.sleep(0.2)  # API 호출 간격 조절
-            
-        except Exception as e:
-            print(f"⚠️ 키워드 '{keyword}' 검색 실패: {e}")
-            continue
-    
-    print(f"✅ 키워드 수집 완료: {len(contentid_to_keywords)}개 관광지에 대한 키워드 정보")
-    return contentid_to_keywords
-
-
-def to_dataframe(items: List[dict]) -> pd.DataFrame:
-    """TourAPI raw 응답(list[dict]) → 표준화된 DataFrame 변환."""
-    rows = []
-    for it in items:
-        # addr1 안전하게 처리 (빈 문자열이나 공백만 있는 경우 대비)
-        addr1 = it.get("addr1", "").strip()
-        if addr1:
-            region_parts = addr1.split()
-            region = region_parts[0] if region_parts else "미상"
-        else:
-            region = "미상"
-            
-        rows.append(
-            dict(
-                name=it["title"],
-                region=region,   # 주소 앞단(시/도)
-                lat=float(it["mapy"]),                        # 위도
-                lon=float(it["mapx"]),                        # 경도
-                # contentid 추가
-                contentid=it.get("contentid", ""),           # TourAPI contentid
-                # cat1 == "A01" (자연) → 자연 태그, 그 외 문화 태그 부여
-                tags="관광,자연" if it.get("cat1") == "A01" else "관광,문화",
-            )
-        )
-    return pd.DataFrame(rows)
-
-
 # ─────────────────────────────────────────────────────────────
 # 메인 로직
 # ─────────────────────────────────────────────────────────────
 
+def load_existing_data_for_type(content_type_id: int) -> tuple[pd.DataFrame | None, set]:
+    """특정 contentTypeId의 기존 CSV 파일을 로드합니다."""
+    file_path = Path("data") / CONTENT_TYPE_FILES[content_type_id]
+    
+    if file_path.exists():
+        try:
+            existing_df = pd.read_csv(file_path)
+            existing_contentids = set(existing_df["contentid"].astype(str))
+            print(f"📄 기존 {CONTENT_TYPE_FILES[content_type_id]} 파일 로드: {len(existing_df)}건")
+            return existing_df, existing_contentids
+        except Exception as e:
+            print(f"❌ 기존 파일 로드 실패 ({CONTENT_TYPE_FILES[content_type_id]}): {e}")
+            return None, set()
+    else:
+        print(f"📄 {CONTENT_TYPE_FILES[content_type_id]} 파일이 없습니다. 새로 생성합니다.")
+        return None, set()
+
+def collect_all_content_type_data(content_type_id: int, type_name: str, existing_contentids: set) -> list[dict]:
+    """특정 contentTypeId의 데이터를 전부 수집합니다 (개수 제한 없음, 중복 제외)."""
+    print(f"🔍 {type_name} 데이터 전체 수집 시작 (contentTypeId: {content_type_id})...")
+    
+    all_items: list[dict] = []
+    new_items_count = 0
+    
+    # 첫 페이지로 전체 개수 파악
+    items, total_count = fetch_area_list(1, content_type_id)
+    
+    if not items and total_count == 0:
+        print(f"❌ {type_name} 데이터가 없습니다.")
+        return []
+        
+    # 중복 체크하여 신규 데이터만 추가
+    for item in items:
+        if item.get("contentid", "") not in existing_contentids:
+            all_items.append(item)
+            new_items_count += 1
+    
+    # 전체 페이지 수 계산
+    page_size = DEFAULT_PARAMS["numOfRows"]
+    total_pages = (total_count + page_size - 1) // page_size
+    
+    print(f"   {type_name}: 전체 {total_count}개 데이터, {total_pages}페이지 (전체 수집)")
+    print(f"   🔄 1/{total_pages} 페이지 완료 - 신규: {new_items_count}건")
+    
+    # 나머지 페이지 수집
+    for page in range(2, total_pages + 1):
+        try:
+            items, _ = fetch_area_list(page, content_type_id)
+            if not items:
+                print(f"   ⚠️  {page}페이지에서 데이터가 없어 수집을 종료합니다.")
+                break
+        except Exception as e:
+            print(f"   ❌ {page}페이지 수집 실패, 계속 진행: {e}")
+            continue  # 실패한 페이지는 건너뛰고 계속
+        
+        # 중복 체크
+        page_new_count = 0
+        for item in items:
+            if item.get("contentid", "") not in existing_contentids:
+                all_items.append(item)
+                page_new_count += 1
+                
+        new_items_count += page_new_count
+        
+        if page % 10 == 0:  # 10페이지마다 진행 상황 출력
+            print(f"   🔄 {page}/{total_pages} 페이지 완료 - 총 신규 누적: {new_items_count}건")
+        time.sleep(0.2)
+    
+    print(f"✅ {type_name} 수집 완료: 총 {len(all_items)}건 신규 데이터")
+    return all_items
+
+def save_type_specific_data(content_type_id: int, new_df: pd.DataFrame, existing_df: pd.DataFrame | None):
+    """contentType별로 개별 CSV 파일에 저장합니다."""
+    filename = CONTENT_TYPE_FILES[content_type_id]
+    file_path = Path("data") / filename
+    
+    # 이미지 URL과 detailed_keywords 기본값 설정
+    if "image_url" not in new_df.columns:
+        new_df["image_url"] = None
+    if "detailed_keywords" not in new_df.columns:
+        new_df["detailed_keywords"] = "[]"
+    
+    # 기존 데이터와 병합
+    if existing_df is not None:
+        # 기존 데이터에 컬럼이 없을 수 있으므로 처리
+        if "image_url" not in existing_df.columns:
+            existing_df["image_url"] = None
+        if "detailed_keywords" not in existing_df.columns:
+            existing_df["detailed_keywords"] = "[]"
+            
+        final_df = pd.concat([existing_df, new_df], ignore_index=True)
+    else:
+        final_df = new_df
+    
+    # CSV 파일 저장
+    Path("data").mkdir(exist_ok=True)
+    final_df.to_csv(file_path, index=False)
+    print(f"✅ {filename} 저장 완료: {len(final_df)}건")
+    
+    return final_df
+
 def main():
-    # 0) 테이블이 없을 수 있으므로 방어적으로 create_all
+    print("🌟 contentType별 분리 수집을 시작합니다!")
+    print("📌 TOUR_DATA_SYSTEM_GUIDE.md에 따라 6개 관광 콘텐츠를 수집합니다")
+    print("   (관광지, 문화시설, 축제, 여행코스, 레포츠, 쇼핑)\n")
+    print("   숙박/음식점은 별도 스크립트로 수집하세요: accommodation_restaurant_loader.py\n")
+
+    # 1) 테이블 생성
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
 
-    # 1) 첫 페이지 호출로 전체 데이터 개수 파악
-    all_items: list[dict] = []
+    # 2) 수집할 contentType 정의 (가이드 문서 기준 전체 수집)
+    content_types = [
+        (12, "관광지"),
+        (14, "문화시설"), 
+        (15, "축제/공연/행사"),
+        (25, "여행코스"),
+        (28, "레포츠"),
+        (38, "쇼핑")
+    ]
     
-    print("🔍 Tour API에서 전체 데이터 수집을 시작합니다...")
-    items, total_count = fetch_area_list(1)
+    print("🌟 전체 모드: 가이드 문서에 따라 6개 contentType을 모두 수집합니다.")
     
-    if not items and total_count == 0:
-        print("❌ 가져온 데이터가 없습니다.")
-        return
+    total_new_items = 0
+    all_db_items = []  # 데이터베이스 저장용
+    
+    # 3) contentType별로 개별 처리
+    for content_type_id, type_name in content_types:
+        print(f"\n{'='*60}")
+        print(f"🔄 {type_name} (contentTypeId: {content_type_id}) 처리 시작")
+        print(f"{'='*60}")
         
-    all_items.extend(items)
-    
-    # 전체 페이지 수 계산
-    page_size = DEFAULT_PARAMS["numOfRows"]  # 100
-    total_pages = (total_count + page_size - 1) // page_size  # 올림 계산
-    
-    print(f"전체 {total_count}개 데이터, {total_pages}페이지 예상")
-    print(f"🔄 1/{total_pages} 페이지 완료 ({len(items)}건)")
-    
-    # 2) 나머지 페이지 순회 (최대 1000페이지로 안전장치)
-    max_safety_pages = min(total_pages, 1000)
-    
-    for page in range(2, max_safety_pages + 1):
-        items, _ = fetch_area_list(page)
-        if not items:
-            print(f"⚠️  {page}페이지에서 데이터가 없어 수집을 종료합니다.")
-            break  # 더 이상 데이터 없음
+        # 기존 데이터 로드
+        existing_df, existing_contentids = load_existing_data_for_type(content_type_id)
+        
+        # 신규 데이터 수집
+        new_items = collect_all_content_type_data(content_type_id, type_name, existing_contentids)
+        
+        if new_items:
+            print(f"💾 {type_name} 신규 데이터 처리 시작: {len(new_items)}건")
+            new_df = to_dataframe(new_items)
             
-        all_items.extend(items)
-        print(f"🔄 {page}/{total_pages} 페이지 완료 ({len(items)}건) - 총 누적: {len(all_items)}건")
-        time.sleep(0.2)              # 과속 방지 (일 1,000건 제한 대비)
-
-    # 3) DataFrame 저장(백업) 및 가공
-    print(f"💾 수집 완료: 총 {len(all_items)}건의 관광지 데이터")
-    df = to_dataframe(all_items)
-    Path("data").mkdir(exist_ok=True)
-    df.to_csv("data/tour_api.csv", index=False)
-    print(f"✅ CSV 파일 저장: data/tour_api.csv")
-
-    # 4) 이미지 URL 수집
-    print("🖼️ 관광지 이미지 수집 중...")
-    image_urls = []
-    for i, contentid in enumerate(df["contentid"], 1):
-        if i % 10 == 0:  # 진행률 표시
-            print(f"   진행률: {i}/{len(df)} ({i/len(df)*100:.1f}%)")
+            # contentType별 파일 저장
+            final_df = save_type_specific_data(content_type_id, new_df, existing_df)
+            
+            # 데이터베이스 저장용 누적
+            all_db_items.extend(new_df.to_dict("records"))
+            total_new_items += len(new_items)
+            
+            print(f"✅ {type_name} 처리 완료 (신규 {len(new_items)}건, 총 {len(final_df)}건)")
+        else:
+            print(f"🎉 {type_name}: 신규 수집할 데이터가 없습니다.")
         
-        image_url = fetch_detail_image(contentid)
-        image_urls.append(image_url)
-        time.sleep(0.1)  # API 호출 간격 조절
+        time.sleep(2.0)  # API 안정성을 위한 간격
+
+    # 4) 데이터베이스 일괄 저장 (신규 데이터만)
+    if all_db_items:
+        print(f"\n🗄️ 데이터베이스에 신규 데이터 일괄 저장 중: {len(all_db_items)}건...")
+        spots = [models.TourSpot(**row) for row in all_db_items]
+        db.bulk_save_objects(spots, return_defaults=False)
+        db.commit()
+        print(f"✅ 데이터베이스 저장 완료")
+
+        # 5) 임베딩 벡터 생성 (신규 데이터만)
+        print("🧠 OpenAI 임베딩 벡터 생성 중...")
+        tag_texts = [row["tags"] for row in all_db_items]
+        vectors = embed_texts(tag_texts)
+        
+        # 벡터를 데이터베이스에 업데이트
+        for i, row in enumerate(all_db_items):
+            tour_spot = db.query(models.TourSpot).filter_by(contentid=row["contentid"]).first()
+            if tour_spot:
+                tour_spot.pref_vector = vectors[i]
+        
+        db.commit()
+        print(f"✅ 임베딩 벡터 생성 완료: {len(vectors)}개")
+    else:
+        print("\n🎉 모든 데이터가 최신 상태입니다. 새로 수집할 데이터가 없습니다.")
     
-    df["image_url"] = image_urls
-    print(f"✅ 이미지 수집 완료: {sum(1 for url in image_urls if url)}개 이미지")
-
-    # 5) 상세 키워드 수집
-    contentid_list = [str(cid) for cid in df["contentid"].tolist() if cid]
-    keyword_mapping = collect_detailed_keywords(contentid_list)
+    db.close()
     
-    # DataFrame에 키워드 정보 추가
-    detailed_keywords_list = []
-    for _, row in df.iterrows():
-        contentid = str(row["contentid"])
-        keywords = keyword_mapping.get(contentid, [])
-        detailed_keywords_list.append(json.dumps(keywords, ensure_ascii=False))
-    
-    df["detailed_keywords"] = detailed_keywords_list
-    print(f"✅ 키워드 매핑 완료: {sum(1 for k in detailed_keywords_list if k != '[]')}개 관광지에 키워드 정보 추가")
-
-    # 6) DB INSERT (ORM 객체 생성 후 bulk_save)
-    spots = [models.TourSpot(**row) for row in df.to_dict("records")]
-    db.bulk_save_objects(spots, return_defaults=False)
-    db.commit()
-
-    # 7) 태그 임베딩 → pref_vector 컬럼 저장
-    print("🤖 OpenAI 임베딩 생성 중...")
-    embeddings = embed_texts(df["tags"].tolist())
-    for spot, vec in zip(spots, embeddings):
-        spot.pref_vector = vec
-    db.commit()
-
-    print(f"✅ 데이터베이스 저장 완료: {len(spots)}개 관광지 + 임베딩 + 이미지 + 키워드")
-
+    print(f"\n{'='*60}")
+    print("🎉 모든 작업이 완료되었습니다!")
+    print(f"📊 총 신규 수집: {total_new_items}건")
+    print("📁 생성된 파일들:")
+    for content_type_id, filename in CONTENT_TYPE_FILES.items():
+        if content_type_id in [ct[0] for ct in content_types]:
+            file_path = Path("data") / filename
+            if file_path.exists():
+                print(f"   - {filename}")
+    print(f"{'='*60}")
 
 if __name__ == "__main__":
     main()

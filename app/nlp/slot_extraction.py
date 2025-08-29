@@ -61,30 +61,41 @@ def extract_slots(user_sentence: str) -> dict:
 
     # 2) 시스템 프롬프트 강화 - 지역명 추출 정확도 향상 ----------------------
     system_prompt = """
-You are a travel planner AI specialized in Korean travel planning.
-Extract structured slots from user query with high accuracy.
+당신은 한국 여행 계획을 전문으로 하는 AI입니다.
+사용자 쿼리에서 구조화된 슬롯을 높은 정확도로 추출하세요.
 
-CRITICAL: For region_pref field:
-- ONLY extract regions that are EXPLICITLY mentioned by the user
-- If NO region is mentioned, return empty array []
-- Do NOT infer, assume, or add any regions that are not explicitly stated
-- Valid region examples when mentioned: "제주도", "서울", "부산", "경기도", "강원도", "전라북도", "전라남도", "경상북도", "경상남도", "충청북도", "충청남도"
-- Keep exact format as mentioned by user
+중요: start_date와 end_date 필드의 경우:
+- "일주일" = 정확히 7일 (예: 2023-10-30부터 2023-11-05까지)
+- "이틀" = 정확히 2일
+- "사흘" = 정확히 3일  
+- "나흘" = 정확히 4일
+- "닷새" = 정확히 5일
+- "엿새" = 정확히 6일
+- 시작일과 종료일을 모두 포함하여 일수를 계산
+- "일주일 정도" 또는 "일주일"의 경우 정확히 총 7일로 설정
+- 예시: start_date가 2023-10-30이면, 7일의 경우 end_date는 2023-11-05
 
-CRITICAL: For activity_tags field:
-- Extract ALL activity-related keywords including natural environments, activities, experiences, festivals, and specific attractions
-- COMPREHENSIVE keyword categories to extract:
-  * Natural environments: "바다", "산", "강", "호수", "계곡", "섬", "해변", "숲", "공원"
-  * Activities: "체험", "관광", "등산", "트레킹", "낚시", "수영", "서핑", "스키", "캠핑"
-  * Cultural: "문화", "축제", "페스티벌", "전시", "박물관", "미술관", "사찰", "궁궐", "한옥"
-  * Recreational: "휴양", "힐링", "스파", "온천", "놀이공원", "테마파크", "동물원", "수족관"
-  * Agricultural: "농업", "농장", "목장", "과수원", "포도원", "딸기", "사과", "배", "쌀"
-  * Local specialties: "맛집", "특산물", "전통시장", "야시장", "카페", "맥주", "와인"
-  * Seasonal: "벚꽃", "단풍", "눈", "겨울", "여름", "봄", "가을"
-- Extract specific activity verbs as nouns: "보다" → "관광", "먹다" → "맛집", "즐기다" → "체험"
-- Be comprehensive in extracting relevant keywords for better recommendation matching
+중요: region_pref 필드의 경우:
+- 사용자가 명시적으로 언급한 지역만 추출
+- 지역이 언급되지 않았으면 빈 배열 [] 반환
+- 추론, 가정, 명시되지 않은 지역 추가 금지
+- 언급될 때 유효한 지역 예시: "제주도", "서울", "부산", "경기도", "강원도", "전라북도", "전라남도", "경상북도", "경상남도", "충청북도", "충청남도"
+- 사용자가 언급한 정확한 형식 유지
 
-Answer with valid JSON matching the slot schema.
+중요: activity_tags 필드의 경우:
+- 자연환경, 활동, 체험, 축제, 특정 관광지를 포함한 모든 활동 관련 키워드 추출
+- 포괄적 키워드 카테고리:
+  * 자연환경: "바다", "산", "강", "호수", "계곡", "섬", "해변", "숲", "공원"
+  * 활동: "체험", "관광", "등산", "트레킹", "낚시", "수영", "서핑", "스키", "캠핑"
+  * 문화: "문화", "축제", "페스티벌", "전시", "박물관", "미술관", "사찰", "궁궐", "한옥"
+  * 휴양: "휴양", "힐링", "스파", "온천", "놀이공원", "테마파크", "동물원", "수족관"
+  * 농업: "농업", "농장", "목장", "과수원", "포도원", "딸기", "사과", "배", "쌀"
+  * 지역특산: "맛집", "특산물", "전통시장", "야시장", "카페", "맥주", "와인"
+  * 계절: "벚꽃", "단풍", "눈", "겨울", "여름", "봄", "가을"
+- 동사를 명사로 변환: "보다" → "관광", "먹다" → "맛집", "즐기다" → "체험"
+- 더 나은 추천 매칭을 위해 포괄적으로 관련 키워드 추출
+
+슬롯 스키마에 맞는 유효한 JSON으로 답변하세요.
 """
     function_schema = {
         "name": "fill_slots",

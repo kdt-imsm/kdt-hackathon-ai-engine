@@ -30,6 +30,7 @@ from fastapi import FastAPI, Depends, HTTPException, Body, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.db.database import SessionLocal, engine, Base
@@ -55,6 +56,15 @@ app = FastAPI(
     title="Rural Planner API",
     description="농촌 일자리 + 관광 맞춤 일정 추천 서비스",
     version="0.1.0",
+)
+
+# CORS 설정 (프론트엔드에서 API 접근 허용)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 도메인 허용 (개발용)
+    allow_credentials=True,
+    allow_methods=["*"],  # 모든 HTTP 메소드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
 )
 
 # 422 오류 상세 디버깅을 위한 예외 처리기
@@ -113,26 +123,53 @@ def get_slots_preview(
 ):
     """사용자 자연어 → 슬롯 추출 + Job/Tour 카드 10개씩 미리보기 반환."""
     try:
-        # 1) 자연어에서 슬롯(JSON) 추출 (GPT 기반)
-        slots = extract_slots(query.query)
-
-        # 2) 검색용 벡터 생성 (순수 슬롯 기반)
+        # 1) 사용자 선호도 기반 검색 벡터 생성 (실제 서비스 로직)
         from app.embeddings.embedding_service import embed_texts
+        from app.recommendation.user_matching import create_user_profile_from_preferences
         
+        print(f"사용자 선호도: 지형={query.user_preferences.terrain_tags}, 활동={query.user_preferences.activity_style_tags}, 일자리={query.user_preferences.job_tags}")
+        
+        # 사용자 프로필 생성
+        user_profile = create_user_profile_from_preferences(
+            query.query,
+            query.user_preferences.terrain_tags,
+            query.user_preferences.activity_style_tags,
+            query.user_preferences.job_tags
+        )
+        search_vector = user_profile['user_vector']
+        
+        # 검색 태그에 사용자 선호도 추가
         search_tags = []
+        search_tags.extend(query.user_preferences.terrain_tags)
+        search_tags.extend(query.user_preferences.activity_style_tags)
+        search_tags.extend(query.user_preferences.job_tags)
+        
+        # 2) 슬롯 추출으로 자연어에서 구체적 정보 추출
+        slots = extract_slots(query.query)
+        print(f"추출된 슬롯: {slots}")
+        
+        # 3) 슬롯 정보와 사용자 선호도를 자연스럽게 결합한 검색 텍스트 생성
+        search_components = [query.query]  # 원본 자연어 요청을 기본으로
+        
+        # 슬롯에서 추출된 활동 태그 추가 (자연어에서 나온 구체적 의도)
         if slots.get("activity_tags"):
-            search_tags.extend(slots["activity_tags"])
-        if slots.get("region_pref"):
-            search_tags.extend(slots["region_pref"])
-        if slots.get("terrain_pref"):
-            search_tags.extend(slots["terrain_pref"])
+            search_components.append(" ".join(slots["activity_tags"]))
             
-        # 기본 검색 벡터 생성
-        search_text = " ".join(search_tags) if search_tags else query.query
-        search_vector = embed_texts([search_text])[0]
+        # 사용자 선호도 추가 (회원가입시 선택한 관심사)
+        preference_text = " ".join(search_tags)
+        if preference_text.strip():
+            search_components.append(preference_text)
+            
+        # 추가 자연어 선호도 (Step 3에서 입력한 세부 취향)
+        if query.user_preferences.preference_details:
+            search_components.append(query.user_preferences.preference_details)
+        
+        # 자연스러운 문장으로 결합
+        search_text = " ".join(search_components)
         
         print(f"검색 태그: {search_tags}")
-        print(f"검색 텍스트: {search_text}")
+        print(f"슬롯 활동태그: {slots.get('activity_tags', [])}")
+        print(f"최종 검색 텍스트: {search_text}")
     
         # 3) 지역 좌표 추출
         from app.utils.location import get_location_coords, is_region_specified
@@ -167,13 +204,26 @@ def get_slots_preview(
         print(f"   키워드: {extracted_keywords}")
         
         # 통합 지능적 추천 호출
-        intelligent_results = get_intelligent_recommendations(
-            user_vector=search_vector,
-            region_filter=slots.get("region_pref", []) if region_specified else None,
-            activity_keywords=extracted_keywords,
-            job_count=5,
-            tour_count=5
-        )
+        print(f"🔍 API 추천 호출 디버깅:")
+        print(f"   region_specified: {region_specified}")
+        print(f"   region_filter: {slots.get('region_pref', []) if region_specified else None}")
+        print(f"   activity_keywords: {extracted_keywords}")
+        print(f"   search_vector 길이: {len(search_vector)}")
+        
+        try:
+            intelligent_results = get_intelligent_recommendations(
+                user_vector=search_vector,
+                region_filter=slots.get("region_pref", []) if region_specified else None,
+                activity_keywords=extracted_keywords,
+                job_count=5,
+                tour_count=20  # 이미지 필터링을 위해 더 많은 관광지 요청
+            )
+            print(f"✅ 지능적 추천 성공")
+        except Exception as e:
+            print(f"❌ 지능적 추천 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            intelligent_results = {"jobs": [], "tours": [], "system_diagnosis": {}}
         
         # 결과 분리
         jobs = intelligent_results["jobs"]  # [(JobPost, score, reason), ...]
@@ -257,23 +307,29 @@ def get_slots_preview(
         else:
             image_urls = {}
         
-        # 최종 tours_preview 생성
+        # 최종 tours_preview 생성 - 이미지가 있는 것만 선별
         tours_preview = []
         for tour_info in tour_data:
             contentid = tour_info['contentid']
             image_url = image_urls.get(contentid) if contentid else None
             
-            tours_preview.append({
-                "content_id": tour_info['content_id'],
-                "title": tour_info['title'],
-                "region": tour_info['region'],
-                "overview": tour_info['overview'],
-                "image_url": image_url,
-                "score": tour_info['score'],
-                "recommendation_reason": tour_info['recommendation_reason'],
-            })
+            # 이미지가 있는 경우만 추가
+            if image_url:
+                tours_preview.append({
+                    "content_id": tour_info['content_id'],
+                    "title": tour_info['title'],
+                    "region": tour_info['region'],
+                    "overview": tour_info['overview'],
+                    "image_url": image_url,
+                    "score": tour_info['score'],
+                    "recommendation_reason": tour_info['recommendation_reason'],
+                })
+                
+                # 최대 5개까지만 반환
+                if len(tours_preview) >= 5:
+                    break
         
-        print(f"✅ 관광지 추천 완료: {len(tours_preview)}개")
+        print(f"✅ 관광지 추천 완료: {len(tours_preview)}개 (이미지 필터링 적용)")
 
         return SlotsResponse(
             success=True,
@@ -378,20 +434,27 @@ def create_smart_schedule(
         print(f"   선택 일거리: {len(req.selected_jobs)}개")
         print(f"   선택 관광지: {len(req.selected_tours)}개")
         
-        # 1) 자연어에서 슬롯 재추출
-        slots = extract_slots(req.query)
+        # 1) 사용자 선호도 기반 프로필 생성 (실제 서비스 로직)
+        from app.recommendation.user_matching import create_user_profile_from_preferences
         
-        # 2) 사용자 선호도 매칭 (기존 로직 재사용)
-        from app.recommendation.user_matching import get_best_matching_user, enhance_user_vector_with_preferences
-        from app.embeddings.embedding_service import embed_texts
-        
-        matched_user_id, similarity_score, user_info = get_best_matching_user(
+        user_profile_info = create_user_profile_from_preferences(
             req.query,
-            slots["activity_tags"], 
-            slots["region_pref"]
+            req.user_preferences.terrain_tags,
+            req.user_preferences.activity_style_tags,
+            req.user_preferences.job_tags
         )
+        print(f"사용자 선호도: 지형={req.user_preferences.terrain_tags}, 활동={req.user_preferences.activity_style_tags}, 일자리={req.user_preferences.job_tags}")
         
-        print(f"매칭된 사용자: ID={matched_user_id}, 유사도={similarity_score:.3f}")
+        # 2) AI Agent를 위한 사용자 선호도 정리
+        user_preferences_for_ai = {
+            "terrain_tags": req.user_preferences.terrain_tags,
+            "activity_style_tags": req.user_preferences.activity_style_tags,
+            "job_tags": req.user_preferences.job_tags,
+            "preference_details": req.user_preferences.preference_details
+        }
+        
+        # 3) 추가 정보용: 슬롯 추출 (일정 생성 시 참고용)
+        slots = extract_slots(req.query)
         
         # 3) 선택된 카드 정보 조회
         selected_jobs = []
@@ -413,7 +476,7 @@ def create_smart_schedule(
             selected_jobs=selected_jobs,
             selected_tours=selected_tours,
             user_query=req.query,
-            user_preferences=user_info
+            user_preferences=user_preferences_for_ai
         )
         
         print(f"🎉 스마트 스케줄링 완료!")
@@ -475,3 +538,106 @@ def update_itinerary_feedback(
             error=str(e),
             traceback=tb
         )
+
+# ─────────────────────────────────────────────────────────────
+#  Demo 전용 엔드포인트들 (DEMO_GUIDE.md 요구사항)
+# ─────────────────────────────────────────────────────────────
+
+from app.services.demo_service import DemoService
+
+demo_service = DemoService()
+
+@app.post("/demo/preferences", response_model=dict)
+async def demo_preferences(
+    keywords: List[str] = Body(..., description="선택된 선호 키워드들")
+):
+    """
+    Demo용 선호도 키워드 저장
+    - 실제로는 저장하지 않고 성공 응답만 반환
+    """
+    return {
+        "success": True,
+        "message": f"{len(keywords)}개의 선호 키워드가 저장되었습니다.",
+        "keywords": keywords
+    }
+
+@app.post("/demo/slots", response_model=dict)
+async def demo_slots(
+    natural_query: str = Body(..., description="사용자 자연어 입력")
+):
+    """
+    Demo용 자연어 슬롯 추출 및 카드 추천
+    - 고정된 농가 5개와 관광지 5개(랜덤) 반환
+    """
+    try:
+        # 고정된 농가 카드 5개
+        job_cards = demo_service.get_demo_job_cards(5)
+        
+        # 관광지 카드 5개 (랜덤)
+        tour_cards = demo_service.get_demo_tour_cards(5)
+        
+        return {
+            "success": True,
+            "natural_query": natural_query,
+            "extracted_slots": {
+                "period": "2주",
+                "location": "전북 김제",
+                "activities": ["과수원 체험", "힐링", "축제"],
+                "preferences": ["체험형", "힐링"]
+            },
+            "job_cards": [card.dict() for card in job_cards],
+            "tour_cards": [card.dict() for card in tour_cards],
+            "total_jobs": len(job_cards),
+            "total_tours": len(tour_cards)
+        }
+        
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print("Demo 슬롯 추출 오류:", tb)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/demo/itinerary", response_model=dict)
+async def demo_itinerary(
+    selected_jobs: List[str] = Body(..., description="선택된 농가 일자리 ID들"),
+    selected_tours: List[str] = Body(..., description="선택된 관광지 ID들")
+):
+    """
+    Demo용 고정 일정 생성
+    - 2025-09-04 ~ 2025-09-19 고정 일정 반환
+    """
+    try:
+        # 고정 일정 생성
+        itinerary = demo_service.generate_demo_itinerary(selected_jobs, selected_tours)
+        
+        return {
+            "success": True,
+            "itinerary": itinerary.dict(),
+            "message": "김제 과수원 체험과 힐링 여행 일정이 생성되었습니다."
+        }
+        
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print("Demo 일정 생성 오류:", tb)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/demo/accommodations", response_model=dict)
+async def demo_accommodations():
+    """
+    Demo용 숙박시설 정보
+    """
+    return {
+        "success": True,
+        "accommodations": demo_service.demo_data["accommodations"]
+    }
+
+@app.get("/demo/restaurants", response_model=dict)
+async def demo_restaurants():
+    """
+    Demo용 음식점 정보
+    """
+    return {
+        "success": True,
+        "restaurants": demo_service.demo_data["restaurants"]
+    }
