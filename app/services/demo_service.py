@@ -55,8 +55,6 @@ class DemoItinerary(BaseModel):
     title: str
     period: str
     schedule: List[DemoScheduleItem]
-    accommodations: List[Dict]
-    restaurants: List[Dict]
 
 class DemoService:
     """Demo 전용 서비스"""
@@ -119,35 +117,35 @@ class DemoService:
         return cards
     
     def generate_demo_itinerary(self, selected_jobs: List[str], selected_tours: List[str]) -> DemoItinerary:
-        """Demo용 고정 일정 생성 (2025-09-04 ~ 2025-09-19) - 농가 데이터의 정확한 날짜/시간 반영"""
+        """Demo용 고정 일정 생성 (2025-09-04 ~ 2025-09-13) - 10일간 사과 수확 체험"""
         
-        # 농가 데이터 기반 일정 (demo_jobs.csv의 정확한 날짜/시간 사용)
+        # 농가 데이터 기반 일정 (사과 수확 도우미만 사용)
         schedule_items = []
         
-        # 전체 기간 날짜 생성 (2025-09-04 ~ 2025-09-19)
+        # 전체 기간 날짜 생성 (2025-09-04 ~ 2025-09-13)
         from datetime import datetime, timedelta
         start_date = datetime(2025, 9, 4)
-        end_date = datetime(2025, 9, 19)
+        end_date = datetime(2025, 9, 13)
         current_date = start_date
         
-        # 첫날 (2025-09-04) - 도착
+        # 첫날 (2025-09-04) - 여행 시작
         schedule_items.extend([
             DemoScheduleItem(
                 date="2025-09-04",
-                time="15:00",
-                type="accommodation",
-                name="모악산 유스호스텔 체크인",
-                address="전북특별자치도 완주군 구이면 모악산길 500",
-                description="김제 농촌 체험 여행 도착 및 숙소 체크인",
-                image_url="https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=500"
+                time="12:00",
+                type="arrival",
+                name="김제 도착",
+                address="전북특별자치도 김제시",
+                description="김제 사과 수확 체험 여행 시작 - 현지 도착",
+                image_url="https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=500"
             ),
             DemoScheduleItem(
                 date="2025-09-04",
-                time="19:00",
+                time="15:00",
                 type="attraction",
-                name="김제 벽골제 저녁 산책",
+                name="김제 벽골제 탐방",
                 address="전북특별자치도 김제시 부량면 벽골제로 442",
-                description="우리나라 최고 저수지 벽골제에서 저녁 산책",
+                description="우리나라 최고의 저수지 벽골제 탐방으로 여행 시작",
                 image_url="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500"
             )
         ])
@@ -207,72 +205,47 @@ class DemoService:
                     image_url="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500"
                 ))
         
-        # 휴식 기간 (2025-09-12)
+        # 사과 수확 후 여유 관광 (2025-09-12)
         schedule_items.extend([
             DemoScheduleItem(
                 date="2025-09-12",
                 time="10:00",
                 type="attraction",
-                name="김제 벽골제 탐방",
-                address="전북특별자치도 김제시 부량면 벽골제로 442",
-                description="벽골제 농경문화 박물관 및 주변 탐방",
-                image_url="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=500"
+                name="백산서원(김제)",
+                address="전북특별자치도 김제시 백산면 하서3길 84",
+                description="조선시대 서원에서 전통 문화 체험",
+                image_url="https://images.unsplash.com/photo-1551961806-bb9de0b5b2eb?w=500"
             ),
             DemoScheduleItem(
                 date="2025-09-12",
-                time="15:00",
+                time="16:00",
                 type="attraction",
-                name="백산서원(김제)",
-                address="전북특별자치도 김제시",
-                description="조선시대 서원에서 전통 문화 체험",
-                image_url="https://images.unsplash.com/photo-1551961806-bb9de0b5b2eb?w=500"
+                name="김제장 (2, 7일)",
+                address="전북특별자치도 김제시 요촌중길 50",
+                description="전통 5일장에서 여행 마지막 쇼핑 및 기념품 구입",
+                image_url="https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=500"
             )
         ])
         
-        # 벼·곡물 수확 기간 (2025-09-13~2025-09-18, 09:00-17:00)
-        rice_dates = ["2025-09-13", "2025-09-14", "2025-09-15", "2025-09-16", "2025-09-17", "2025-09-18"]
-        for i, date in enumerate(rice_dates):
-            schedule_items.append(DemoScheduleItem(
-                date=date,
-                time="09:00",
-                type="job",
-                name=f"벼·곡물 수확 ({i+1}일차)",
-                address="전북 김제시 금산면 벽골로 123",
-                description="전통농법으로 벼 수확 체험 (09:00-17:00)",
-                image_url="https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=500"
-            ))
-            
-            # 저녁 시간 활동
-            if date == "2025-09-17":  # 김제장 (2,7,12,17,22,27일)
-                schedule_items.append(DemoScheduleItem(
-                    date=date,
-                    time="18:00",
-                    type="attraction",
-                    name="김제장 (2, 7일)",
-                    address="전북특별자치도 김제시 요촌중길 50",
-                    description="전통 5일장에서 지역 특산품과 저녁 먹거리 탐방",
-                    image_url="https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=500"
-                ))
-        
-        # 마지막 날 (2025-09-19) - 출발
+        # 마지막 날 (2025-09-13) - 출발
         schedule_items.extend([
             DemoScheduleItem(
-                date="2025-09-19",
+                date="2025-09-13",
                 time="10:00",
-                type="attraction",
-                name="귀신사(김제)",
-                address="전북특별자치도 김제시 금산면",
-                description="모악산 자락 천년고찰에서 마지막 인사",
-                image_url="https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=500"
+                type="departure",
+                name="여행 마무리 및 출발 준비",
+                address="전북특별자치도 김제시",
+                description="9일간의 김제 사과 수확 체험 여행 마무리",
+                image_url="https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500"
             ),
             DemoScheduleItem(
-                date="2025-09-19",
+                date="2025-09-13",
                 time="14:00",
-                type="accommodation",
-                name="모악산 유스호스텔 체크아웃",
-                address="전북특별자치도 완주군 구이면 모악산길 500",
-                description="16일간의 김제 농촌 체험 여행 마무리 및 귀가",
-                image_url="https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=500"
+                type="departure", 
+                name="김제 출발",
+                address="전북특별자치도 김제시",
+                description="김제에서 집으로 돌아가기 - 여행 종료",
+                image_url="https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=500"
             )
         ])
         
@@ -280,9 +253,7 @@ class DemoService:
         schedule_items.sort(key=lambda x: (x.date, x.time))
         
         return DemoItinerary(
-            title="김제 과수원 체험과 힐링 여행",
-            period="2025.09.04 ~ 2025.09.19 (16일간)",
-            schedule=schedule_items,
-            accommodations=self.demo_data["accommodations"],
-            restaurants=self.demo_data["restaurants"]
+            title="김제 사과 수확 체험과 힐링 여행",
+            period="2025.09.04 ~ 2025.09.13 (10일간)",
+            schedule=schedule_items
         )

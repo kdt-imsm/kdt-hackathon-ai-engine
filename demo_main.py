@@ -101,23 +101,43 @@ async def demo_itinerary(
 @app.get("/demo/accommodations", response_model=dict)
 async def demo_accommodations():
     """Demo용 숙박시설 정보"""
+    accommodations = []
+    for acc in demo_service.demo_data["accommodations"]:
+        accommodations.append({
+            "name": acc["name"],
+            "addr1": acc["addr1"],
+            "tel": acc["tel"],
+            "first_image": acc["first_image"]
+        })
+    
     return {
         "success": True,
-        "accommodations": demo_service.demo_data["accommodations"]
+        "accommodations": accommodations
     }
 
 @app.get("/demo/restaurants", response_model=dict)
 async def demo_restaurants():
     """Demo용 음식점 정보"""
+    restaurants = []
+    for rest in demo_service.demo_data["restaurants"]:
+        restaurants.append({
+            "name": rest["name"],
+            "addr1": rest["addr1"],
+            "tel": rest["tel"],
+            "first_image": rest["first_image"]
+        })
+    
     return {
         "success": True,
-        "restaurants": demo_service.demo_data["restaurants"]
+        "restaurants": restaurants
     }
 
 # Demo UI 접근
 @app.get("/demo", response_class=FileResponse)
 async def demo_page():
-    return FileResponse("public/demo.html")
+    import os
+    file_path = os.path.join(os.path.dirname(__file__), "public", "demo.html")
+    return FileResponse(file_path)
 
 if __name__ == "__main__":
     import uvicorn

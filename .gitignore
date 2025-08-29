@@ -59,3 +59,4 @@ data/raw/
 # git rm --cached -r .venv __pycache__ ...
 docs/
 docs2/
+docs3/
