@@ -18,20 +18,71 @@ class SimpleSchedulingService:
         self.project_root = Path(__file__).parent.parent.parent
     
     def _extract_duration_from_request(self, request: str) -> int:
-        """자연어에서 기간 추출 (최대 10일)"""
+        """자연어에서 기간 추출 (최대 10일, 한글 숫자 지원)"""
+        
+        # 한글 숫자 매핑
+        korean_numbers = {
+            '하루': 1, '이틀': 2, '사흘': 3, '나흘': 4, '닷새': 5,
+            '엿새': 6, '이레': 7, '여드레': 8, '아흐레': 9, '열흘': 10,
+            '일주일': 7, '이주일': 14, '한주': 7, '두주': 14
+        }
+        
+        # 한글 숫자 표현 확인
+        for korean, days in korean_numbers.items():
+            if korean in request:
+                print(f"🔍 한글 기간 감지: '{korean}' → {days}일")
+                return min(days, 10)
+        
         # "2주" = 14일 → 10일로 제한
         if "주" in request:
             weeks_match = re.search(r'(\d+)주', request)
             if weeks_match:
                 weeks = int(weeks_match.group(1))
-                return min(weeks * 7, 10)
+                duration = weeks * 7
+                print(f"🔍 주 단위 기간 감지: {weeks}주 → {duration}일")
+                return min(duration, 10)
         
-        # "5일", "3박" 등
+        # "5일", "3박", "10일" 등
         duration_match = re.search(r'(\d+)(?:일|박)', request)
         if duration_match:
-            return min(int(duration_match.group(1)), 10)
+            days = int(duration_match.group(1))
+            print(f"🔍 일/박 단위 기간 감지: {days}일")
+            return min(days, 10)
         
+        # "정도", "쯤" 등과 함께 사용되는 숫자 패턴
+        # "10일 정도", "5일쯤" 등
+        approx_match = re.search(r'(\d+)일?\s*(?:정도|쯤|가량|즈음)', request)
+        if approx_match:
+            days = int(approx_match.group(1))
+            print(f"🔍 대략적 기간 감지: {days}일 정도")
+            return min(days, 10)
+        
+        print("🔍 기간 정보 없음 → 기본값 3일")
         return 3  # 기본값
+    
+    def _convert_korean_date_to_calendar_format(self, korean_date: str) -> str:
+        """한국어 날짜(10월 1일 (화))를 캘린더 형식(mm/dd/yyyy hh:mm xx)으로 변환"""
+        import re
+        
+        if not korean_date:
+            return "01/01/2025 9:00 am"
+        
+        try:
+            # "10월 1일 (화)" 형태에서 월과 일 추출
+            match = re.search(r'(\d+)월\s*(\d+)일', korean_date)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                
+                # 2025년으로 고정, 시간은 9:00 am으로 고정
+                return f"{month:02d}/{day:02d}/2025 9:00 am"
+            else:
+                # 파싱 실패시 기본값
+                return "01/01/2025 9:00 am"
+                
+        except Exception as e:
+            print(f"날짜 변환 오류: {e}")
+            return "01/01/2025 9:00 am"
     
     def _extract_start_date_from_request(self, request: str, region: str = None) -> tuple[str, datetime]:
         """자연어에서 시작 날짜 추출 (2025년 기준, 9월 4일 이후)"""
@@ -309,7 +360,7 @@ class SimpleSchedulingService:
                          preferences: Dict[str, Any],
                          region: str = None) -> Dict[str, Any]:
         """
-        System_Improvements.md 규칙에 따른 일정 생성
+        LLM 강화 일정 생성 시스템
         
         규칙:
         - 5-6일: 첫째날/마지막날 제외하고 농가 배치, 첫째날/마지막날에 관광지
@@ -317,8 +368,23 @@ class SimpleSchedulingService:
                   첫째날(관광지1개), 마지막하루전날(관광지2개), 마지막날(관광지1개)
         """
         
-        duration = self._extract_duration_from_request(natural_request)
+        print(f"🧠 LLM 기반 일정 생성 시작: {natural_request}")
+        
+        # LLM으로 자연어 의도 추출 (기간 정보 포함)
+        extracted_intent = self.openai_service.extract_intent_from_natural_text(natural_request)
+        
+        # 기간 결정 (LLM 우선, 폴백으로 기존 로직)
+        llm_duration = extracted_intent.get("기간")
+        if llm_duration and isinstance(llm_duration, (int, float)) and llm_duration > 0:
+            duration = min(int(llm_duration), 10)  # 최대 10일 제한
+            print(f"🎯 LLM에서 기간 추출: {duration}일 (원본: {extracted_intent.get('기간_텍스트', llm_duration)})")
+        else:
+            duration = self._extract_duration_from_request(natural_request)
+            print(f"🔄 기존 로직으로 기간 추출: {duration}일")
+        
         start_date_str, start_date_obj = self._extract_start_date_from_request(natural_request, region)
+        
+        print(f"📅 최종 일정 정보: {duration}일, 시작일: {start_date_str}")
         
         # 지역 추출 (농가 주소에서 추출 또는 매개변수 사용)
         if not region and selected_farm:
@@ -396,6 +462,7 @@ class SimpleSchedulingService:
                 return self._generate_rule_based_schedule(duration, start_date_str, start_date_obj, selected_farm, all_tours_for_schedule, region)
             
             schedule_text = self._format_itinerary_as_text(itinerary_data)
+            bubble_schedule = self._format_bubble_friendly_schedule(itinerary_data, duration)
             
             # 숙박, 음식점 데이터 추가
             accommodations = []
@@ -412,11 +479,19 @@ class SimpleSchedulingService:
                     "itinerary_id": f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                     "total_days": duration,
                     "days": duration,
-                    "itinerary": itinerary_data,
+                    "itinerary": itinerary_data,  # 기존 형태 (호환성 유지)
                     "schedule_text": schedule_text,
+                    "bubble_schedule": bubble_schedule,  # Bubble 친화적 구조
                     "accommodations": accommodations,
                     "restaurants": restaurants,
-                    "region": region
+                    "region": region,
+                    # Bubble 접근성 향상을 위한 추가 필드
+                    "summary": {
+                        "duration": duration,
+                        "farm_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '농가']),
+                        "tour_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '관광지']),
+                        "region": region
+                    }
                 }
             }
             
@@ -548,6 +623,140 @@ class SimpleSchedulingService:
             formatted_lines.append("")  # 빈 줄
         
         return "\n".join(formatted_lines)
+
+    def _format_bubble_friendly_schedule(self, itinerary: List[Dict[str, Any]], duration: int) -> Dict[str, Any]:
+        """Bubble 친화적인 일정 구조로 변환"""
+        
+        # 농가 배치 규칙 확인
+        if duration <= 6:
+            farm_days = list(range(2, duration))  # 2일차~(마지막-1)일차
+            tour_days = [1, duration]  # 첫째날, 마지막날
+        else:
+            farm_days = list(range(2, duration - 1))  # 2일차~(마지막-2)일차
+            tour_days = [1, duration - 1, duration]  # 첫째날, 마지막하루전날, 마지막날
+        
+        bubble_schedule = {
+            "individual_days": [],  # 개별 일자별 상세 정보
+            "grouped_schedule": [],  # Bubble 표시용 그룹화된 일정
+            "calendar_events": [],   # 캘린더용 구조화된 데이터 (새로 추가)
+            "farm_period": None,     # 농가 일정 기간
+            "tour_days": []         # 관광지 일정 날들
+        }
+        
+        # 개별 일자별 상세 정보 (기존 형태 유지)
+        bubble_schedule["individual_days"] = itinerary
+        
+        # 캘린더용 이벤트 데이터 생성
+        calendar_events = []
+        for item in itinerary:
+            # 한국어 날짜를 datetime 객체로 변환
+            calendar_date = self._convert_korean_date_to_calendar_format(item.get('date', ''))
+            activity_name = item.get('name', '알 수 없는 활동')
+            
+            calendar_events.append({
+                "date": calendar_date,  # mm/dd/yyyy hh:mm xx 형식
+                "activity": activity_name,  # 농가 이름 or 관광지 이름
+                "day": item.get('day', 1),
+                "type": item.get('schedule_type', '활동')
+            })
+        
+        bubble_schedule["calendar_events"] = calendar_events
+        
+        # 농가 일정 그룹화
+        if farm_days:
+            farm_info = next((item for item in itinerary if item.get('schedule_type') == '농가'), None)
+            if farm_info:
+                start_day = min(farm_days)
+                end_day = max(farm_days)
+                start_date = next((item.get('date', '') for item in itinerary if item.get('day') == start_day), '')
+                end_date = next((item.get('date', '') for item in itinerary if item.get('day') == end_day), '')
+                
+                bubble_schedule["farm_period"] = {
+                    "type": "farm_period",
+                    "start_day": start_day,
+                    "end_day": end_day,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "duration_days": len(farm_days),
+                    "farm_name": farm_info.get('name', ''),
+                    "farm_address": farm_info.get('address', ''),
+                    "work_time": f"{farm_info.get('start_time', '08:00')}-{farm_info.get('end_time', '17:00')}",
+                    "description": f"Day {start_day}-{end_day}: {farm_info.get('name', '')} 농가 일정"
+                }
+        
+        # 관광지 일정들 
+        tour_items = [item for item in itinerary if item.get('schedule_type') == '관광지']
+        for tour_item in tour_items:
+            bubble_schedule["tour_days"].append({
+                "type": "tour",
+                "day": tour_item.get('day'),
+                "date": tour_item.get('date', ''),
+                "tour_name": tour_item.get('name', ''),
+                "tour_address": tour_item.get('address', ''),
+                "start_time": tour_item.get('start_time', ''),
+                "description": f"Day {tour_item.get('day')}: {tour_item.get('name', '')} 관광"
+            })
+        
+        # 그룹화된 일정 (Bubble 표시용)
+        grouped_items = []
+        
+        # 첫째날 관광지
+        first_day_tour = next((item for item in tour_items if item.get('day') == 1), None)
+        if first_day_tour:
+            grouped_items.append({
+                "order": 1,
+                "type": "tour",
+                "title": f"Day 1: 도착 및 관광",
+                "subtitle": first_day_tour.get('name', ''),
+                "date": first_day_tour.get('date', ''),
+                "start_time": first_day_tour.get('start_time', ''),
+                "description": f"{first_day_tour.get('date', '')} {first_day_tour.get('start_time', '')}",
+                "details": first_day_tour
+            })
+        
+        # 농가 일정 (묶어서 표시)
+        if bubble_schedule["farm_period"]:
+            farm_period = bubble_schedule["farm_period"]
+            grouped_items.append({
+                "order": 2,
+                "type": "farm_period",
+                "title": f"Day {farm_period['start_day']}-{farm_period['end_day']}: 농가 체험",
+                "subtitle": farm_period['farm_name'],
+                "description": f"{farm_period['duration_days']}일간 농가 일정 ({farm_period['work_time']})",
+                "details": farm_period
+            })
+        
+        # 마지막 하루 전날 관광지들 (7일 이상일 때)
+        if duration >= 7:
+            second_last_day_tours = [item for item in tour_items if item.get('day') == duration - 1]
+            if second_last_day_tours:
+                tour_names = [tour.get('name', '') for tour in second_last_day_tours]
+                grouped_items.append({
+                    "order": 3,
+                    "type": "tour_multiple",
+                    "title": f"Day {duration-1}: 관광지 투어",
+                    "subtitle": " & ".join(tour_names),
+                    "description": f"{len(second_last_day_tours)}개 관광지",
+                    "details": second_last_day_tours
+                })
+        
+        # 마지막날 관광지
+        last_day_tour = next((item for item in tour_items if item.get('day') == duration), None)
+        if last_day_tour:
+            grouped_items.append({
+                "order": 4,
+                "type": "tour",
+                "title": f"Day {duration}: 마무리 관광",
+                "subtitle": last_day_tour.get('name', ''),
+                "date": last_day_tour.get('date', ''),
+                "start_time": last_day_tour.get('start_time', ''),
+                "description": f"{last_day_tour.get('date', '')} {last_day_tour.get('start_time', '')}",
+                "details": last_day_tour
+            })
+        
+        bubble_schedule["grouped_schedule"] = grouped_items
+        
+        return bubble_schedule
     
     def _validate_schedule_rules(self, itinerary: List[Dict[str, Any]], duration: int, selected_farm: Dict) -> bool:
         """AI 생성된 일정이 배치 규칙을 준수하는지 검증"""
@@ -687,6 +896,7 @@ class SimpleSchedulingService:
                     })
         
         schedule_text = self._format_itinerary_as_text(itinerary)
+        bubble_schedule = self._format_bubble_friendly_schedule(itinerary, duration)
         
         # 숙박, 음식점 데이터 추가
         accommodations = []
@@ -703,11 +913,19 @@ class SimpleSchedulingService:
                 "itinerary_id": f"schedule_rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 "total_days": duration,
                 "days": duration,
-                "itinerary": itinerary,
+                "itinerary": itinerary,  # 기존 형태 (호환성 유지)
                 "schedule_text": schedule_text,
+                "bubble_schedule": bubble_schedule,  # Bubble 친화적 구조
                 "accommodations": accommodations,
                 "restaurants": restaurants,
-                "region": region
+                "region": region,
+                # Bubble 접근성 향상을 위한 추가 필드
+                "summary": {
+                    "duration": duration,
+                    "farm_days_count": len([item for item in itinerary if item.get('schedule_type') == '농가']),
+                    "tour_days_count": len([item for item in itinerary if item.get('schedule_type') == '관광지']),
+                    "region": region
+                }
             }
         }
     
@@ -746,6 +964,7 @@ class SimpleSchedulingService:
             
             itinerary_data = result.get("itinerary", [])
             schedule_text = self._format_itinerary_as_text(itinerary_data)
+            bubble_schedule = self._format_bubble_friendly_schedule(itinerary_data, len(itinerary_data))
             
             return {
                 "status": "success",
@@ -753,9 +972,17 @@ class SimpleSchedulingService:
                     "itinerary_id": itinerary_id,
                     "total_days": len(itinerary_data),
                     "days": len(itinerary_data),
-                    "itinerary": itinerary_data,
+                    "itinerary": itinerary_data,  # 기존 형태 (호환성 유지)
                     "schedule_text": schedule_text,
-                    "changes_made": [f"'{feedback}' 피드백이 반영되었습니다."]
+                    "bubble_schedule": bubble_schedule,  # Bubble 친화적 구조
+                    "changes_made": [f"'{feedback}' 피드백이 반영되었습니다."],
+                    # Bubble 접근성 향상을 위한 추가 필드
+                    "summary": {
+                        "duration": len(itinerary_data),
+                        "farm_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '농가']),
+                        "tour_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '관광지']),
+                        "feedback_applied": True
+                    }
                 }
             }
             

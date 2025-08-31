@@ -12,6 +12,7 @@ from typing import Dict, List, Any
 
 from app.services.simple_recommendation_service import get_simple_recommendation_service
 from app.services.simple_scheduling_service import get_simple_scheduling_service
+from app.schemas.user_schemas import OnboardingRequest, BubbleUser2
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -39,8 +40,9 @@ if public_dir.exists():
 recommendation_service = get_simple_recommendation_service()
 scheduling_service = get_simple_scheduling_service()
 
-# 전역 일정 저장소 (실제 서비스에서는 데이터베이스 사용)
+# 전역 저장소 (실제 서비스에서는 데이터베이스 사용)
 schedules_storage = {}
+users_storage = {}  # Bubble User2 데이터 저장소
 
 @app.get("/healthz")
 def health_check():
@@ -147,23 +149,21 @@ def create_schedule(request: Dict[str, Any] = Body(...)):
         print(f"❌ 일정 생성 API 오류: {e}")
         raise HTTPException(status_code=500, detail=f"일정 생성 중 오류: {str(e)}")
 
-@app.post("/api/schedule/feedback")
-def update_schedule_feedback(request: Dict[str, Any] = Body(...)):
+@app.post("/api/schedule/{itinerary_id}/feedback")
+def update_schedule_feedback_with_id(itinerary_id: str, request: Dict[str, Any] = Body(...)):
     """
-    일정 피드백 처리 API
+    일정 피드백 처리 API (itinerary_id 기반)
     
     요청 형식:
     {
-        "itinerary_id": "schedule_20250831_143000",
         "feedback": "첫째날 일정을 다른 관광지로 바꿔주세요"
     }
     """
     try:
-        itinerary_id = request.get("itinerary_id", "")
         feedback = request.get("feedback", "")
         
-        if not itinerary_id or not feedback:
-            raise HTTPException(status_code=400, detail="itinerary_id와 feedback은 필수입니다.")
+        if not feedback:
+            raise HTTPException(status_code=400, detail="feedback은 필수입니다.")
         
         # 기존 일정 조회
         if itinerary_id not in schedules_storage:
@@ -188,6 +188,131 @@ def update_schedule_feedback(request: Dict[str, Any] = Body(...)):
         print(f"❌ 피드백 처리 API 오류: {e}")
         raise HTTPException(status_code=500, detail=f"피드백 처리 중 오류: {str(e)}")
 
+@app.post("/api/onboarding")
+def create_user_onboarding(request: OnboardingRequest = Body(...)):
+    """
+    Bubble 온보딩 데이터 수집 API
+    
+    BUBBLE User2 테이블 구조에 맞춰 사용자 선호도 데이터를 저장합니다.
+    온보딩 과정: 누구와 → 풍경 선호도 → 여행 스타일 → 체험 유형 → 추가 요청
+    """
+    try:
+        # User2 데이터 구조로 변환
+        user_data = BubbleUser2(
+            address=f"{request.sido} {request.sigungu}",
+            age=request.age,
+            gender=request.gender,
+            name=request.name,
+            pref_etc=request.additional_requests,  # 6단계 서술형 (5개 칸)
+            pref_jobs=request.selected_jobs,        # 5단계 체험 유형
+            pref_style=request.selected_styles,     # 4단계 여행 스타일
+            pref_view=request.selected_views,       # 3단계 풍경 선호도
+            real_name=request.real_name,
+            with_whom=request.with_whom             # 2단계 누구와
+        )
+        
+        # 사용자 ID 생성 (실제로는 UUID 등 사용)
+        import time
+        user_id = f"user_{int(time.time())}"
+        
+        # 전역 저장소에 저장
+        users_storage[user_id] = user_data
+        
+        print(f"📝 온보딩 완료: {user_data.name} ({user_id})")
+        print(f"선호도: 풍경={user_data.pref_view}, 스타일={user_data.pref_style}, 체험={user_data.pref_jobs}")
+        
+        return JSONResponse(content={
+            "status": "success",
+            "message": "온보딩이 완료되었습니다.",
+            "user_id": user_id,
+            "user_data": user_data.model_dump()
+        })
+        
+    except Exception as e:
+        print(f"❌ 온보딩 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"온보딩 처리 중 오류: {str(e)}")
+
+@app.get("/api/user/{user_id}")
+def get_user_data(user_id: str):
+    """사용자 데이터 조회 API"""
+    if user_id not in users_storage:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    
+    return {
+        "status": "success",
+        "user_data": users_storage[user_id].model_dump()
+    }
+
+@app.post("/recommendations/with-user")
+def get_recommendations_with_user(request: Dict[str, Any] = Body(...)):
+    """
+    사용자 ID 기반 추천 API (Bubble 연동용)
+    
+    요청 형식:
+    {
+        "user_id": "user_1234567890",
+        "natural_request": "9월에 김제에서 과수원 체험하고 싶어"
+    }
+    """
+    try:
+        user_id = request.get("user_id", "")
+        natural_request = request.get("natural_request", "")
+        
+        if not user_id or not natural_request:
+            raise HTTPException(status_code=400, detail="user_id와 natural_request는 필수입니다.")
+        
+        # 해커톤용: 사용자 데이터 조회 또는 기본값 사용
+        if user_id not in users_storage:
+            # 해커톤용 기본 사용자 데이터 (사용자가 없어도 작동)
+            print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            user_data = BubbleUser2(
+                address="전국",
+                age="25",
+                gender="전체",
+                name="데모사용자",
+                pref_etc=["자연친화", "체험학습", "농촌여행", "힐링", "사진촬영"],
+                pref_jobs=["과수", "채소", "축산"],
+                pref_style=["체험형", "힐링·여유", "자연·생태"],
+                pref_view=["산", "들판", "숲"],
+                real_name="데모사용자",
+                with_whom="친구와"
+            )
+        else:
+            user_data = users_storage[user_id]
+        
+        # User2 선호도를 기존 preferences 형식으로 변환
+        preferences = {
+            "landscape_keywords": user_data.pref_view,     # 풍경 선호도
+            "travel_style_keywords": user_data.pref_style, # 여행 스타일
+            "job_type_keywords": user_data.pref_jobs,      # 체험 유형
+            "simple_natural_words": user_data.pref_etc     # 추가 요청사항
+        }
+        
+        print(f"📋 사용자 기반 추천 요청: {user_data.name} - {natural_request}")
+        print(f"사용자 선호도: {preferences}")
+        
+        # 추천 서비스 호출
+        result = recommendation_service.get_recommendations(natural_request, preferences)
+        
+        if result["status"] == "error":
+            raise HTTPException(status_code=400, detail=result["message"])
+        
+        # 응답에 사용자 정보 추가
+        result["user_info"] = {
+            "user_id": user_id,
+            "name": user_data.name,
+            "with_whom": user_data.with_whom,
+            "address": user_data.address
+        }
+        
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 사용자 기반 추천 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"추천 처리 중 오류: {str(e)}")
+
 @app.get("/api/regions")
 def get_available_regions():
     """사용 가능한 전북 지역 목록 반환"""
@@ -197,6 +322,227 @@ def get_available_regions():
     ]
     return {"regions": regions}
 
+@app.get("/api/preferences/options")
+def get_preference_options():
+    """온보딩에서 사용할 선호도 옵션들 반환 (index.html과 동일)"""
+    return {
+        "status": "success",
+        "data": {
+            "landscape_options": [
+                "산", "바다", "강·호수", "숲", "섬"
+            ],
+            "travel_style_options": [
+                "힐링·여유", "체험형", "야외활동", "레저·액티비티", 
+                "문화·역사", "축제·이벤트", "먹거리 탐방", "사진 스팟"
+            ],
+            "job_type_options": [
+                "채소", "과수", "화훼", "식량작물", "축산", "농기계"
+            ]
+        }
+    }
+
+@app.post("/api/schedule/with-user")
+def create_schedule_with_user(request: Dict[str, Any] = Body(...)):
+    """
+    사용자 ID 기반 일정 생성 API (Bubble 연동용)
+    
+    요청 형식:
+    {
+        "user_id": "user_1234567890",
+        "natural_request": "10월에 열흘간 김제에서 과수원 체험하고 싶어",
+        "selected_farm": { ... },
+        "selected_tours": [ ... ]
+    }
+    """
+    try:
+        user_id = request.get("user_id", "")
+        natural_request = request.get("natural_request", "")
+        selected_farm = request.get("selected_farm", {})
+        selected_tours = request.get("selected_tours", [])
+        
+        if not user_id or not natural_request:
+            raise HTTPException(status_code=400, detail="user_id와 natural_request는 필수입니다.")
+        
+        if not selected_farm:
+            raise HTTPException(status_code=400, detail="농가를 1개 선택해야 합니다.")
+        
+        # 해커톤용: 사용자 데이터 조회 또는 기본값 사용
+        if user_id not in users_storage:
+            # 해커톤용 기본 사용자 데이터 (사용자가 없어도 작동)
+            print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            user_data = BubbleUser2(
+                address="전국",
+                age="25",
+                gender="전체",
+                name="데모사용자",
+                pref_etc=["자연친화", "체험학습", "농촌여행", "힐링", "사진촬영"],
+                pref_jobs=["과수", "채소", "축산"],
+                pref_style=["체험형", "힐링·여유", "자연·생태"],
+                pref_view=["산", "들판", "숲"],
+                real_name="데모사용자",
+                with_whom="친구와"
+            )
+        else:
+            user_data = users_storage[user_id]
+        
+        # User2 선호도를 기존 preferences 형식으로 변환
+        preferences = {
+            "landscape_keywords": user_data.pref_view,
+            "travel_style_keywords": user_data.pref_style, 
+            "job_type_keywords": user_data.pref_jobs,
+            "simple_natural_words": user_data.pref_etc
+        }
+        
+        print(f"📅 사용자 기반 일정 생성: {user_data.name} - {natural_request}")
+        
+        # 농가 주소에서 지역 추출
+        region = None
+        if selected_farm:
+            farm_address = selected_farm.get("address", "")
+            for r in ["김제시", "전주시", "군산시", "익산시", "정읍시", "남원시", "고창군", "부안군", "임실군", "순창군", "진안군", "무주군", "장수군", "완주군"]:
+                if r in farm_address:
+                    region = r
+                    break
+        
+        # 일정 생성 서비스 호출
+        result = scheduling_service.generate_schedule(
+            natural_request, selected_farm, selected_tours, preferences, region
+        )
+        
+        if result["status"] == "success":
+            # 전역 저장소에 일정 저장
+            itinerary_id = result["data"]["itinerary_id"]
+            schedules_storage[itinerary_id] = {
+                "schedule": result["data"],
+                "user_id": user_id,
+                "original_request": {
+                    "natural_request": natural_request,
+                    "selected_farm": selected_farm,
+                    "selected_tours": selected_tours,
+                    "preferences": preferences
+                }
+            }
+            
+            # 응답에 사용자 정보 추가
+            result["user_info"] = {
+                "user_id": user_id,
+                "name": user_data.name,
+                "with_whom": user_data.with_whom,
+                "address": user_data.address
+            }
+        
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 사용자 기반 일정 생성 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"일정 생성 중 오류: {str(e)}")
+
+@app.get("/api/schedule/{itinerary_id}")
+def get_schedule(itinerary_id: str):
+    """저장된 일정 조회 API"""
+    if itinerary_id not in schedules_storage:
+        raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+    
+    schedule_data = schedules_storage[itinerary_id]
+    return {
+        "status": "success",
+        "data": schedule_data["schedule"],
+        "user_id": schedule_data.get("user_id")
+    }
+
+@app.post("/api/schedule/feedback")
+def send_schedule_feedback(request: Dict[str, Any] = Body(...)):
+    """
+    일정 피드백 처리 API (itinerary_id 또는 user_id 기반)
+    
+    요청 형식 1 (itinerary_id 기반):
+    {
+        "itinerary_id": "schedule_20250831_143000",
+        "feedback": "첫째날 일정을 다른 관광지로 바꿔주세요"
+    }
+    
+    요청 형식 2 (user_id 기반):
+    {
+        "user_id": "user_1234567890", 
+        "feedback": "첫째날 일정을 다른 관광지로 바꿔주세요"
+    }
+    """
+    try:
+        itinerary_id = request.get("itinerary_id", "")
+        user_id = request.get("user_id", "")
+        feedback = request.get("feedback", "")
+        
+        if not feedback:
+            raise HTTPException(status_code=400, detail="feedback은 필수입니다.")
+        
+        target_itinerary_id = None
+        target_schedule_data = None
+        
+        # 방법 1: itinerary_id 직접 사용 (index.html용)
+        if itinerary_id:
+            if itinerary_id not in schedules_storage:
+                raise HTTPException(status_code=404, detail="해당 일정을 찾을 수 없습니다.")
+            
+            target_itinerary_id = itinerary_id
+            target_schedule_data = schedules_storage[itinerary_id]
+            print(f"🔄 일정 수정 요청 (일정ID: {itinerary_id}): {feedback}")
+        
+        # 방법 2: user_id로 최근 일정 찾기 (Bubble용)
+        elif user_id:
+            user_schedules = []
+            for iid, schedule_data in schedules_storage.items():
+                if schedule_data.get("user_id") == user_id:
+                    user_schedules.append((iid, schedule_data))
+            
+            if not user_schedules:
+                raise HTTPException(status_code=404, detail="해당 사용자의 일정을 찾을 수 없습니다.")
+            
+            # 가장 최근 일정 선택
+            target_itinerary_id, target_schedule_data = max(user_schedules, key=lambda x: x[0])
+            print(f"🔄 일정 수정 요청 (사용자: {user_id}, 일정: {target_itinerary_id}): {feedback}")
+        
+        else:
+            raise HTTPException(status_code=400, detail="itinerary_id 또는 user_id 중 하나는 필수입니다.")
+        
+        original_schedule = target_schedule_data["schedule"]
+        
+        # 피드백 처리 서비스 호출
+        result = scheduling_service.process_feedback(target_itinerary_id, feedback, original_schedule)
+        
+        if result["status"] == "success":
+            # 수정된 일정 저장
+            schedules_storage[target_itinerary_id]["schedule"] = result["data"]
+        
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 피드백 처리 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"피드백 처리 중 오류: {str(e)}")
+
+@app.get("/api/user/{user_id}/schedules")
+def get_user_schedules(user_id: str):
+    """사용자별 생성된 일정 목록 조회"""
+    user_schedules = []
+    
+    for itinerary_id, schedule_data in schedules_storage.items():
+        if schedule_data.get("user_id") == user_id:
+            user_schedules.append({
+                "itinerary_id": itinerary_id,
+                "title": f"{schedule_data['schedule'].get('summary', {}).get('duration', 0)}일 일정",
+                "region": schedule_data['schedule'].get('summary', {}).get('region', ''),
+                "created_at": schedule_data['schedule'].get('itinerary_id', '').replace('schedule_', '').replace('_', '-'),
+                "total_days": schedule_data['schedule'].get('total_days', 0)
+            })
+    
+    return {
+        "status": "success",
+        "data": user_schedules
+    }
+
 # 루트 경로 (API 문서 안내)
 @app.get("/")
 def root():
@@ -204,10 +550,19 @@ def root():
         "service": "전북 농촌 일여행 추천 시스템",
         "version": "2.0.0",
         "docs": "/docs",
+        "bubble_integration": "완료",
         "endpoints": {
+            "onboarding": "/api/onboarding",
+            "preference_options": "/api/preferences/options",
+            "user_data": "/api/user/{user_id}",
+            "user_schedules": "/api/user/{user_id}/schedules",
             "recommendations": "/recommendations",
+            "recommendations_with_user": "/recommendations/with-user",
             "schedule": "/api/schedule", 
+            "schedule_with_user": "/api/schedule/with-user",
+            "get_schedule": "/api/schedule/{itinerary_id}",
             "feedback": "/api/schedule/feedback",
+            "feedback_with_id": "/api/schedule/{itinerary_id}/feedback",
             "regions": "/api/regions"
         }
     }

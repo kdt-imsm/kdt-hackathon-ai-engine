@@ -10,10 +10,12 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from app.utils.jeonbuk_region_mapping import extract_region_from_natural_text
 from app.services.detail_loader import fetch_detail_image
+from app.embeddings.openai_service import OpenAIService
 
 class SimpleRecommendationService:
     def __init__(self):
         self.project_root = Path(__file__).parent.parent.parent
+        self.openai_service = OpenAIService()
         
     def _load_farms_data(self) -> List[Dict[str, Any]]:
         """dummy_jobs.json에서 농가 데이터 로드"""
@@ -233,37 +235,70 @@ class SimpleRecommendationService:
     
     def get_recommendations(self, natural_request: str, preferences: Dict[str, List[str]]) -> Dict[str, Any]:
         """
-        단순화된 추천 시스템
-        1. 자연어에서 전북 지역 추출
-        2. 해당 지역 농가 데이터 필터링 + 키워드 매칭으로 5개 추천
-        3. 해당 지역 관광지 데이터 + 이미지 필터링 + 키워드 매칭으로 5개 추천
+        LLM 강화 추천 시스템
+        1. LLM으로 자연어에서 상세한 여행 의도 추출
+        2. 기존 키워드 매칭과 LLM 결과를 통합하여 향상된 추천
+        3. 지역, 농가, 관광지 추천의 정확도 향상
         """
         
-        # 1. 전북 지역 추출
-        target_region = extract_region_from_natural_text(natural_request)
+        print(f"LLM 기반 자연어 분석 시작: {natural_request}")
+        
+        # 1. LLM으로 자연어 의도 추출
+        extracted_intent = self.openai_service.extract_intent_from_natural_text(natural_request)
+        
+        # 2. LLM 결과와 기존 선호도 통합
+        enhanced_keywords = self.openai_service.enhance_keywords_with_context(extracted_intent, preferences)
+        
+        # 3. 지역 결정 (LLM 결과 우선, 폴백으로 기존 로직)
+        target_region = extracted_intent.get("지역")
+        if not target_region:
+            target_region = extract_region_from_natural_text(natural_request)
+            
         if not target_region:
             return {
                 "status": "error",
                 "error_code": "INVALID_REGION",
                 "message": "전북 지역을 찾을 수 없습니다. 전북 지역명을 포함해 주세요.",
                 "available_regions": ["고창군", "군산시", "김제시", "남원시", "무주군", "부안군", 
-                                    "순창군", "완주군", "익산시", "임실군", "장수군", "전주시", "정읍시", "진안군"]
+                                    "순창군", "완주군", "익산시", "임실군", "장수군", "전주시", "정읍시", "진안군"],
+                "llm_analysis": {
+                    "extracted_intent": extracted_intent,
+                    "confidence": extracted_intent.get("신뢰도", 0.0)
+                }
             }
         
-        # 2. 농가 추천 (지역 필터링 → 키워드 매칭)
+        print(f"🎯 결정된 대상 지역: {target_region}")
+        print(f"🔍 LLM 추출 의도: {extracted_intent}")
+        print(f"🚀 향상된 키워드: {enhanced_keywords}")
+        
+        # 4. 농가 추천 (LLM 향상 키워드 활용)
         all_farms = self._load_farms_data()
         regional_farms = self._filter_farms_by_region(all_farms, target_region)
-        job_keywords = preferences.get('job_type_keywords', [])
-        recommended_farms = self._match_farms_by_job_keywords(regional_farms, job_keywords)
         
-        # 3. 관광지 추천 (지역 데이터 → 이미지 필터링 → 키워드 매칭)
+        # LLM 향상 키워드 + 기존 선호도 통합
+        combined_job_keywords = enhanced_keywords.get('job_type_keywords', []) + \
+                               enhanced_keywords.get('activity_keywords', []) + \
+                               enhanced_keywords.get('seasonal_keywords', [])
+        
+        recommended_farms = self._match_farms_by_job_keywords(regional_farms, combined_job_keywords)
+        
+        # 5. 관광지 추천 (LLM 향상 키워드 활용)
         regional_attractions = self._load_regional_attractions(target_region)
         attractions_with_images = self._filter_attractions_with_images(regional_attractions)
-        travel_keywords = preferences.get('travel_style_keywords', [])
-        landscape_keywords = preferences.get('landscape_keywords', [])
-        simple_natural_words = preferences.get('simple_natural_words', [])
+        
+        # LLM 향상 키워드 활용
+        combined_travel_keywords = enhanced_keywords.get('travel_style_keywords', [])
+        combined_landscape_keywords = enhanced_keywords.get('landscape_keywords', [])
+        combined_activity_keywords = enhanced_keywords.get('activity_keywords', [])
+        combined_seasonal_keywords = enhanced_keywords.get('seasonal_keywords', [])
+        
+        # 모든 LLM 추출 키워드 통합
+        all_enhanced_keywords = combined_travel_keywords + combined_landscape_keywords + \
+                              combined_activity_keywords + combined_seasonal_keywords
+        
         recommended_attractions = self._match_attractions_by_preference(
-            attractions_with_images, travel_keywords, landscape_keywords, natural_request, simple_natural_words)
+            attractions_with_images, combined_travel_keywords, combined_landscape_keywords, 
+            natural_request, all_enhanced_keywords)
         
         # 4. 프론트엔드 형식으로 변환 (요구사항에 맞는 필드명)
         farm_cards = []
@@ -277,7 +312,6 @@ class SimpleRecommendationService:
                 "end_time": farm.get("end_time", "17:00"),  # 종료시간
                 "photo": f"/public/images/jobs/{farm.get('image', 'demo_image.jpg')}",  # 사진
                 # 추가 정보
-                "tag": farm.get("tag", ""),
                 "required_people": farm.get("required_people", "")
             })
         
@@ -313,7 +347,24 @@ class SimpleRecommendationService:
                 "tour_spots": tour_cards,
                 "target_region": target_region,
                 "natural_request": natural_request,
-                "preferences": preferences
+                "preferences": preferences,
+                # LLM 분석 결과 추가
+                "llm_analysis": {
+                    "extracted_intent": extracted_intent,
+                    "confidence": extracted_intent.get("신뢰도", 0.0),
+                    "enhanced_keywords": enhanced_keywords,
+                    "region_source": "llm" if extracted_intent.get("지역") else "fallback"
+                },
+                # Bubble 접근성 향상을 위한 추가 필드
+                "bubble_data": {
+                    "total_farms": len(farm_cards),
+                    "total_tours": len(tour_cards),
+                    "estimated_duration": extracted_intent.get("기간", 3),
+                    "season_info": extracted_intent.get("시기", ""),
+                    "activity_types": extracted_intent.get("활동_유형", []),
+                    "region_name": target_region,
+                    "recommendations_ready": len(farm_cards) > 0 and len(tour_cards) > 0
+                }
             }
         }
 

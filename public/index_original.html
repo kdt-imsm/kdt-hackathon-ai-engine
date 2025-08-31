@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      전북 농촌 일여행 시스템 - System_Improvements.md 요구사항 구현
+    </title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Noto Sans KR", sans-serif;
+        background-color: #f8f9fa;
+      }
+      .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4rem 0;
+        margin-bottom: 2rem;
+      }
+      .step-indicator {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 2rem;
+      }
+      .step {
+        padding: 0.5rem 1rem;
+        margin: 0 0.5rem;
+        border-radius: 25px;
+        background: #e9ecef;
+        color: #6c757d;
+      }
+      .step.active {
+        background: #007bff;
+        color: white;
+      }
+      .step.completed {
+        background: #28a745;
+        color: white;
+      }
+      .card-hover {
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+      }
+      .card-hover:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      .card.selected {
+        border-color: #007bff;
+        border-width: 2px;
+        background-color: #f8f9ff;
+      }
+      .preference-tag {
+        background: #e9ecef;
+        border: 1px solid #ced4da;
+        color: #495057;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        margin: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .preference-tag.selected {
+        background: #007bff;
+        border-color: #007bff;
+        color: white;
+      }
+      .preference-tag:hover {
+        background: #dee2e6;
+      }
+      .preference-tag.selected:hover {
+        background: #0056b3;
+      }
+      .preference-button {
+        background: #e9ecef;
+        border: 1px solid #ced4da;
+        color: #495057;
+        padding: 0.75rem 1.5rem;
+        border-radius: 25px;
+        margin: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 0.95rem;
+      }
+      .preference-button.selected {
+        background: #007bff;
+        border-color: #007bff;
+        color: white;
+      }
+      .preference-button:hover {
+        background: #dee2e6;
+        transform: translateY(-2px);
+      }
+      .preference-button.selected:hover {
+        background: #0056b3;
+      }
+      .onboarding-step {
+        display: none;
+      }
+      .onboarding-step.active {
+        display: block;
+      }
+      .loading {
+        display: none;
+        text-align: center;
+        padding: 2rem;
+      }
+      .spinner-border {
+        width: 3rem;
+        height: 3rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Hero Section -->
+    <div class="hero-section">
+      <div class="container text-center">
+        <h1 class="display-4 mb-3">🌾 전북 농촌 일여행 시스템</h1>
+        <p class="lead">System_Improvements.md 요구사항에 따른 정확한 구현</p>
+      </div>
+    </div>
+
+    <div class="container">
+      <!-- Step Indicator -->
+      <div class="step-indicator">
+        <div class="step active" id="step1">1. 자연어 입력</div>
+        <div class="step" id="step2">2. 추천 결과</div>
+        <div class="step" id="step3">3. 일정 생성</div>
+      </div>
+      
+      <!-- 온보딩 버튼 -->
+      <div class="text-center mb-4">
+        <button class="btn btn-outline-primary" onclick="showOnboarding()">
+          <i class="fas fa-user-plus me-2"></i>온보딩 먼저 하기
+        </button>
+      </div>
+
+      <!-- Onboarding Steps (처음에만 표시) -->
+      <div id="onboarding-section" class="mb-5" style="display: none">
+        <div class="row justify-content-center">
+          <div class="col-md-10">
+            <div class="card">
+              <div class="card-header">
+                <h3>
+                  <i class="fas fa-heart text-danger me-2"></i>선호도 설정 및
+                  여행 요청 사항
+                </h3>
+              </div>
+              <div class="card-body">
+                <!-- 1. 풍경 선호도 (5개) -->
+                <div class="mb-4">
+                  <h5>
+                    <i class="fas fa-mountain text-success me-2"></i>어떤 풍경을
+                    좋아하시나요? (5개 중 선택)
+                  </h5>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <div
+                      class="preference-tag"
+                      data-type="landscape"
+                      data-value="산"
+                    >
+                      산
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="landscape"
+                      data-value="바다"
+                    >
+                      바다
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="landscape"
+                      data-value="강·호수"
+                    >
+                      강·호수
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="landscape"
+                      data-value="숲"
+                    >
+                      숲
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="landscape"
+                      data-value="섬"
+                    >
+                      섬
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. 여행 스타일 선호도 (8개) -->
+                <div class="mb-4">
+                  <h5>
+                    <i class="fas fa-hiking text-info me-2"></i>어떤 여행
+                    스타일을 선호하시나요? (8개 중 선택)
+                  </h5>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="힐링·여유"
+                    >
+                      힐링·여유
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="체험형"
+                    >
+                      체험형
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="야외활동"
+                    >
+                      야외활동
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="레저·액티비티"
+                    >
+                      레저·액티비티
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="문화·역사"
+                    >
+                      문화·역사
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="축제·이벤트"
+                    >
+                      축제·이벤트
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="먹거리 탐방"
+                    >
+                      먹거리 탐방
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="travel_style"
+                      data-value="사진 스팟"
+                    >
+                      사진 스팟
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. 일자리 선호도 (6개) -->
+                <div class="mb-4">
+                  <h5>
+                    <i class="fas fa-seedling text-warning me-2"></i>원하시는
+                    일자리 종류를 알려주세요 (6개 중 선택)
+                  </h5>
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="채소"
+                    >
+                      채소
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="과수"
+                    >
+                      과수
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="화훼"
+                    >
+                      화훼
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="식량작물"
+                    >
+                      식량작물
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="축산"
+                    >
+                      축산
+                    </div>
+                    <div
+                      class="preference-tag"
+                      data-type="job_type"
+                      data-value="농기계"
+                    >
+                      농기계
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 4. 추가 요청사항 (단답 키워드 5개, 선택사항) -->
+                <div class="mb-4">
+                  <h5>
+                    <i class="fas fa-comments text-primary me-2"></i>추가
+                    요청사항 (선택사항, 최대 5개)
+                  </h5>
+                  <p class="text-muted small">
+                    단답 키워드로 입력하세요. 입력하지 않아도 됩니다.
+                  </p>
+                  <div class="row">
+                    <div class="col-md-6 mb-2">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="natural1"
+                        placeholder="예: 뚜벅이 여행"
+                      />
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="natural2"
+                        placeholder="예: 자연 산책"
+                      />
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="natural3"
+                        placeholder="예: 시장투어"
+                      />
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="natural4"
+                        placeholder="예: 숨겨진 맛집"
+                      />
+                    </div>
+                    <div class="col-12 mb-2">
+                      <input
+                        type="text"
+                        class="form-control"
+                        id="natural5"
+                        placeholder="예: 빵, 디저트 투어"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 다음 단계 버튼 -->
+                <div class="text-center">
+                  <button class="btn btn-primary btn-lg" onclick="goToStep2()">
+                    <i class="fas fa-arrow-right me-2"></i>자연어 요청 입력하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 1: 자연어 요청 입력 -->
+      <div id="natural-input-section" class="mb-5">
+        <div class="row justify-content-center">
+          <div class="col-md-8">
+            <div class="card">
+              <div class="card-header">
+                <h3>
+                  <i class="fas fa-comments text-primary me-2"></i>자연어 여행
+                  요청
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label"
+                    >언제, 어디서, 무엇을 하고 싶으신가요?</label
+                  >
+                  <textarea
+                    class="form-control"
+                    id="naturalQuery"
+                    rows="4"
+                    placeholder="예시: 10월 초에 열흘 정도 전북 김제에서 과수원 체험하면서 힐링하고 싶어. 축제도 있으면 가보고 싶어."
+                  ></textarea>
+                </div>
+                <div class="text-center">
+                  <button
+                    class="btn btn-success btn-lg"
+                    onclick="searchRecommendations()"
+                  >
+                    <i class="fas fa-search me-2"></i>추천 받기
+                  </button>
+                  <button
+                    class="btn btn-outline-secondary ms-2"
+                    onclick="loadExample()"
+                  >
+                    예시 불러오기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div class="loading" id="loading">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3">추천 결과를 가져오는 중...</p>
+      </div>
+
+      <!-- Step 2: 추천 결과 -->
+      <div id="results-section" class="mb-5" style="display: none">
+        <div class="row">
+          <!-- 농가 추천 -->
+          <div class="col-md-6">
+            <h3>
+              <i class="fas fa-tractor text-success me-2"></i>추천 농가 (5개,
+              1개만 선택)
+            </h3>
+            <div id="jobCards"></div>
+          </div>
+
+          <!-- 관광지 추천 -->
+          <div class="col-md-6">
+            <h3>
+              <i class="fas fa-map-marked-alt text-info me-2"></i>추천 관광지
+              (5개, 원하는 만큼 선택)
+            </h3>
+            <div id="tourCards"></div>
+          </div>
+        </div>
+
+        <div class="text-center mt-4">
+          <button
+            class="btn btn-success btn-lg"
+            onclick="goToStep3()"
+            id="generateBtn"
+            disabled
+          >
+            <i class="fas fa-calendar me-2"></i>선택한 카드로 일정 생성
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: 일정 생성 결과 -->
+      <div id="itinerary-section" class="mb-5" style="display: none">
+        <h3>
+          <i class="fas fa-calendar-alt text-primary me-2"></i>생성된 맞춤형
+          일정
+        </h3>
+        <div id="itineraryResult"></div>
+
+        <!-- 숙박 추천 섹션 -->
+        <div class="mt-5" id="accommodationSection" style="display: none">
+          <h4>
+            <i class="fas fa-bed text-info me-2"></i>추천 숙박시설 (해당 지역)
+          </h4>
+          <div class="row" id="accommodationCards"></div>
+        </div>
+
+        <!-- 음식점 추천 섹션 -->
+        <div class="mt-4" id="restaurantSection" style="display: none">
+          <h4>
+            <i class="fas fa-utensils text-success me-2"></i>추천 음식점 (해당
+            지역)
+          </h4>
+          <div class="row" id="restaurantCards"></div>
+        </div>
+
+        <!-- 피드백 섹션 -->
+        <div class="mt-4">
+          <h4><i class="fas fa-comment text-warning me-2"></i>일정 피드백</h4>
+          <div class="mb-3">
+            <textarea
+              class="form-control"
+              id="feedback"
+              rows="3"
+              placeholder="일정 수정 요청사항을 자연어로 입력하세요"
+            ></textarea>
+          </div>
+          <button
+            class="btn btn-warning"
+            onclick="submitFeedback()"
+            id="feedbackBtn"
+          >
+            피드백 제출
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 전역 변수
+      let selectedPreferences = {
+        landscape_keywords: [],
+        travel_style_keywords: [],
+        job_type_keywords: [],
+        simple_natural_words: [],
+      };
+      let selectedFarm = null;
+      let selectedTours = [];
+      let currentItineraryId = null;
+
+      // 페이지 로드 시 초기화
+      document.addEventListener("DOMContentLoaded", function () {
+        // 선호도 태그 클릭 이벤트
+        document.querySelectorAll(".preference-tag").forEach((tag) => {
+          tag.addEventListener("click", function () {
+            this.classList.toggle("selected");
+          });
+        });
+
+        // 예시 데이터 자동 로드
+        setTimeout(() => {
+          loadExample();
+        }, 500);
+      });
+
+      // 예시 데이터 로드
+      function loadExample() {
+        // 선호도 선택 해제
+        document.querySelectorAll(".preference-tag.selected").forEach((tag) => {
+          tag.classList.remove("selected");
+        });
+
+        // 예시 선호도 설정
+        document
+          .querySelector('[data-type="landscape"][data-value="산"]')
+          .classList.add("selected");
+        document
+          .querySelector('[data-type="landscape"][data-value="숲"]')
+          .classList.add("selected");
+        document
+          .querySelector('[data-type="travel_style"][data-value="축제·이벤트"]')
+          .classList.add("selected");
+        document
+          .querySelector('[data-type="travel_style"][data-value="힐링·여유"]')
+          .classList.add("selected");
+        document
+          .querySelector('[data-type="job_type"][data-value="과수"]')
+          .classList.add("selected");
+
+        // 추가 요청사항 예시
+        document.getElementById("natural1").value = "뚜벅이 여행";
+        document.getElementById("natural2").value = "자연 산책";
+
+        // 자연어 요청 예시
+        document.getElementById("naturalQuery").value =
+          "10월 초에 열흘 정도 전북 김제에서 과수원 체험하면서 힐링하고 싶어. 축제도 있으면 가보고 싶어.";
+      }
+
+      // Step 2로 이동
+      function goToStep2() {
+        // 선호도 수집
+        selectedPreferences.landscape_keywords = Array.from(
+          document.querySelectorAll('[data-type="landscape"].selected')
+        ).map((el) => el.dataset.value);
+        selectedPreferences.travel_style_keywords = Array.from(
+          document.querySelectorAll('[data-type="travel_style"].selected')
+        ).map((el) => el.dataset.value);
+        selectedPreferences.job_type_keywords = Array.from(
+          document.querySelectorAll('[data-type="job_type"].selected')
+        ).map((el) => el.dataset.value);
+
+        // 추가 요청사항 5개 칸에서 수집 (빈 값은 제외)
+        const additionalRequests = [
+          document.getElementById("natural1").value.trim(),
+          document.getElementById("natural2").value.trim(),
+          document.getElementById("natural3").value.trim(),
+          document.getElementById("natural4").value.trim(),
+          document.getElementById("natural5").value.trim(),
+        ].filter((req) => req !== "");
+        selectedPreferences.simple_natural_words = additionalRequests;
+
+        // 화면 전환
+        document.getElementById("preference-section").style.display = "none";
+        document.getElementById("natural-input-section").style.display =
+          "block";
+        document
+          .getElementById("step1")
+          .classList.replace("active", "completed");
+        document.getElementById("step2").classList.add("active");
+      }
+
+      // 추천 검색
+      async function searchRecommendations() {
+        const naturalRequest = document
+          .getElementById("naturalQuery")
+          .value.trim();
+
+        if (!naturalRequest) {
+          alert("자연어 요청을 입력해주세요.");
+          return;
+        }
+
+        // System_Improvements.md: 선호도 키워드와 자연어 요청을 서버에서 결합
+
+        // 로딩 표시
+        document.getElementById("natural-input-section").style.display = "none";
+        document.getElementById("loading").style.display = "block";
+
+        try {
+          const response = await fetch("/recommendations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              natural_request: naturalRequest,
+              preferences: selectedPreferences,
+            }),
+          });
+
+          const result = await response.json();
+          document.getElementById("loading").style.display = "none";
+
+          if (result.status === "success") {
+            displayRecommendations({
+              farms: result.data.farms || [],
+              tour_spots: result.data.tour_spots || [],
+            });
+            console.log("추천 결과:", result);
+          } else {
+            alert("오류: " + (result.message || "API 호출 실패"));
+          }
+        } catch (error) {
+          document.getElementById("loading").style.display = "none";
+          alert("네트워크 오류: " + error.message);
+        }
+      }
+
+      // 추천 결과 표시
+      function displayRecommendations(data) {
+        // 농가 카드 표시 (요구사항: photo, farm, title, address, start_time, end_time)
+        const jobCardsHtml = data.farms
+          .map(
+            (farm, index) => `
+                <div class="card card-hover mb-3" onclick="selectFarm(${index})">
+                    ${
+                      farm.photo
+                        ? `<img src="${farm.photo}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="${farm.farm}">`
+                        : ""
+                    }
+                    <div class="card-body">
+                        <h5 class="card-title">${farm.farm}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">${
+                          farm.title
+                        }</h6>
+                        <p class="card-text">
+                            📍 ${farm.address}<br>
+                            ⏰ ${farm.start_time} - ${farm.end_time}
+                            ${farm.tag ? `<br>🏷️ ${farm.tag}` : ""}
+                            ${
+                              farm.required_people
+                                ? `<br>👥 ${farm.required_people}명`
+                                : ""
+                            }
+                        </p>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+        document.getElementById("jobCards").innerHTML = jobCardsHtml;
+
+        // 관광지 카드 표시 (요구사항: photo, name, address, overview)
+        const tourCardsHtml = data.tour_spots
+          .map(
+            (spot, index) => `
+                <div class="card card-hover mb-3" onclick="selectTour(${index})">
+                    ${
+                      spot.photo
+                        ? `<img src="${spot.photo}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="${spot.name}">`
+                        : ""
+                    }
+                    <div class="card-body">
+                        <h5 class="card-title">${spot.name}</h5>
+                        <p class="card-text">
+                            📍 ${spot.address}
+                            ${
+                              spot.overview
+                                ? `<br><small class="text-muted">${spot.overview}</small>`
+                                : ""
+                            }
+                        </p>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+        document.getElementById("tourCards").innerHTML = tourCardsHtml;
+
+        // 데이터 저장
+        window.currentRecommendations = data;
+
+        // 화면 전환
+        document.getElementById("results-section").style.display = "block";
+        document
+          .getElementById("step1")
+          .classList.replace("active", "completed");
+        document.getElementById("step2").classList.add("active");
+      }
+
+      // 농가 선택 (1개만)
+      function selectFarm(index) {
+        // 기존 선택 해제
+        document.querySelectorAll("#jobCards .card").forEach((card) => {
+          card.classList.remove("selected");
+        });
+
+        // 새로 선택
+        document
+          .querySelectorAll("#jobCards .card")
+          [index].classList.add("selected");
+        selectedFarm = window.currentRecommendations.farms[index];
+
+        updateGenerateButton();
+      }
+
+      // 관광지 선택 (여러 개)
+      function selectTour(index) {
+        const card = document.querySelectorAll("#tourCards .card")[index];
+        const tour = window.currentRecommendations.tour_spots[index];
+
+        if (card.classList.contains("selected")) {
+          card.classList.remove("selected");
+          selectedTours = selectedTours.filter(
+            (t) => t.tour_id !== tour.tour_id
+          );
+        } else {
+          card.classList.add("selected");
+          selectedTours.push(tour);
+        }
+
+        updateGenerateButton();
+      }
+
+      // 일정 생성 버튼 활성화 체크
+      function updateGenerateButton() {
+        const btn = document.getElementById("generateBtn");
+        btn.disabled = !selectedFarm || selectedTours.length === 0;
+      }
+
+      // Step 3로 이동 (일정 생성)
+      async function goToStep3() {
+        if (!selectedFarm || selectedTours.length === 0) {
+          alert("농가 1개와 관광지 1개 이상을 선택해주세요.");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/schedule", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              natural_request: document.getElementById("naturalQuery").value,
+              selected_farm: selectedFarm,
+              selected_tours: selectedTours,
+              preferences: selectedPreferences,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            currentItineraryId = result.data.itinerary_id;
+            displayItinerary(result.data);
+          } else {
+            alert("오류: " + (result.message || "API 호출 실패"));
+          }
+        } catch (error) {
+          alert("네트워크 오류: " + error.message);
+        }
+      }
+
+      // 일정 결과 표시
+      function displayItinerary(data) {
+        const itineraryContent =
+          data.schedule_text ||
+          data.natural_language_itinerary ||
+          "일정 생성에 실패했습니다.";
+
+        document.getElementById("itineraryResult").innerHTML = `
+                <div class="alert alert-success">
+                    ✅ ${
+                      data.days || data.total_days || "?"
+                    }일 맞춤형 일정이 생성되었습니다! ${
+          data.region ? `(${data.region} 지역)` : ""
+        } (ID: ${data.itinerary_id || "N/A"})
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div style="white-space: pre-wrap; line-height: 1.6;">${itineraryContent}</div>
+                    </div>
+                </div>
+            `;
+
+        // 숙박시설 카드 표시
+        if (data.accommodations && data.accommodations.length > 0) {
+          displayAccommodationCards(data.accommodations);
+          document.getElementById("accommodationSection").style.display =
+            "block";
+        }
+
+        // 음식점 카드 표시
+        if (data.restaurants && data.restaurants.length > 0) {
+          displayRestaurantCards(data.restaurants);
+          document.getElementById("restaurantSection").style.display = "block";
+        }
+
+        document.getElementById("itinerary-section").style.display = "block";
+        document.getElementById("results-section").style.display = "none";
+        document
+          .getElementById("step2")
+          .classList.replace("active", "completed");
+        document.getElementById("step3").classList.add("active");
+      }
+
+      // 숙박시설 카드 표시
+      function displayAccommodationCards(accommodations) {
+        const cardsHtml = accommodations
+          .map(
+            (acc) => `
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        ${
+                          acc.photo
+                            ? `<img src="${acc.photo}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="${acc.name}">`
+                            : '<div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;"><i class="fas fa-bed fa-3x text-muted"></i></div>'
+                        }
+                        <div class="card-body">
+                            <h6 class="card-title">${acc.name}</h6>
+                            <p class="card-text small">📍 ${acc.address}</p>
+                        </div>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+        document.getElementById("accommodationCards").innerHTML = cardsHtml;
+      }
+
+      // 음식점 카드 표시
+      function displayRestaurantCards(restaurants) {
+        const cardsHtml = restaurants
+          .map(
+            (rest) => `
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        ${
+                          rest.photo
+                            ? `<img src="${rest.photo}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="${rest.name}">`
+                            : '<div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;"><i class="fas fa-utensils fa-3x text-muted"></i></div>'
+                        }
+                        <div class="card-body">
+                            <h6 class="card-title">${rest.name}</h6>
+                            <p class="card-text small">📍 ${rest.address}</p>
+                        </div>
+                    </div>
+                </div>
+            `
+          )
+          .join("");
+        document.getElementById("restaurantCards").innerHTML = cardsHtml;
+      }
+
+      // 피드백 제출
+      async function submitFeedback() {
+        const feedback = document.getElementById("feedback").value.trim();
+
+        if (!feedback) {
+          alert("피드백 내용을 입력해주세요.");
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/schedule/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              itinerary_id: currentItineraryId,
+              feedback: feedback,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            displayFeedbackResult(result.data);
+          } else {
+            alert("오류: " + (result.message || "API 호출 실패"));
+          }
+        } catch (error) {
+          alert("네트워크 오류: " + error.message);
+        }
+      }
+
+      // 피드백 결과 표시
+      function displayFeedbackResult(data) {
+        const changesHtml = (data.changes_summary || [])
+          .map((change) => `<li>${change}</li>`)
+          .join("");
+        const itineraryContent =
+          data.schedule_text ||
+          data.updated_itinerary ||
+          data.natural_language_itinerary ||
+          "일정을 찾을 수 없습니다.";
+
+        document.getElementById("itineraryResult").innerHTML = `
+                <div class="alert alert-success">
+                    ✅ 피드백이 반영되어 일정이 수정되었습니다!
+                </div>
+                ${
+                  changesHtml
+                    ? `<div class="alert alert-info">
+                    <h5>수정사항:</h5>
+                    <ul>${changesHtml}</ul>
+                </div>`
+                    : ""
+                }
+                <div class="card">
+                    <div class="card-body">
+                        <h5>수정된 일정:</h5>
+                        <div style="white-space: pre-wrap; line-height: 1.6;">${itineraryContent}</div>
+                    </div>
+                </div>
+            `;
+      }
+    </script>
+  </body>
+</html>

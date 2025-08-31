@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     """
 
     openai_api_key: str
-    postgres_uri: str
+    postgres_uri: str = ""  # 데모 시스템에서는 PostgreSQL 사용 안 함
     embed_model: str = "text-embedding-3-small"
     slot_model: str = "gpt-4o-mini"
     itinerary_model: str = "gpt-4o"
