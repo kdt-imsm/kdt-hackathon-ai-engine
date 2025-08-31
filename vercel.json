@@ -1,15 +1,22 @@
 {
-  "version": 2,
-  "builds": [
+  "functions": {
+    "app/main.py": {
+      "runtime": "@vercel/python"
+    }
+  },
+  "rewrites": [
     {
-      "src": "demo_main.py",
-      "use": "@vercel/python"
+      "source": "/api/(.*)",
+      "destination": "/app/main.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/public/$1"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "demo_main.py"
+  "build": {
+    "env": {
+      "PYTHONPATH": "$PYTHONPATH:."
     }
-  ]
+  }
 }
