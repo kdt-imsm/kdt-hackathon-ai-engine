@@ -90,7 +90,7 @@ class SimpleSchedulingService:
         base_date = datetime(2025, 9, 4)  # 오늘을 2025년 9월 4일로 가정
         
         # 김제 지역이고 10월 요청이면 김제지평선축제 고려 (10월 8-12일)
-        if region == "김제시" and "10월" in request:
+        if region and "김제" in region and "10월" in request:
             if "초" in request:
                 start_date = datetime(2025, 10, 1)  # 축제 기간을 포함하도록
             elif "말" in request:
@@ -393,19 +393,19 @@ class SimpleSchedulingService:
         
         # 지역 추출 (농가 주소에서 추출 또는 매개변수 사용)
         if not region and selected_farm:
-            farm_address = selected_farm.get("address", "")
+            farm_address = selected_farm.get("location", "")
             # 간단한 지역 추출 로직
             for r in ["김제시", "전주시", "군산시", "익산시", "정읍시", "남원시", "고창군", "부안군", "임실군", "순창군", "진안군", "무주군", "장수군", "완주군"]:
                 if r in farm_address:
                     region = r
                     break
         
-        # 필요한 관광지 개수 계산
+        # 필요한 관광지 개수 계산 - 20개 관광지를 충분히 활용
         total_tour_slots = 0
         if duration <= 6:
-            total_tour_slots = 2  # 첫째날 + 마지막날
+            total_tour_slots = 8  # 충분한 관광지 확보 (2개 필요하지만 여유분 포함)
         else:
-            total_tour_slots = 4  # 첫째날(1개) + 마지막하루전날(2개) + 마지막날(1개)
+            total_tour_slots = 15  # 충분한 관광지 확보 (4개 필요하지만 여유분 포함)
         
         # 새로운 스코어링 시스템을 활용한 추가 관광지 선택
         all_tours_for_schedule = selected_tours.copy()
@@ -441,7 +441,7 @@ class SimpleSchedulingService:
                     attraction_scores.append(score_obj)
                 
                 # 김제 지역이면 김제지평선축제 우선 처리
-                if region == "김제시":
+                if selected_farm and "김제" in selected_farm.get("location", ""):
                     gimje_festival_attr = None
                     other_attrs = []
                     
@@ -560,6 +560,10 @@ class SimpleSchedulingService:
             result = json.loads(response.choices[0].message.content)
             
             itinerary_data = result.get("itinerary", [])
+            
+            print(f"🤖 AI 생성 일정: 총 {len(itinerary_data)}개 일정, 예상 일수 {duration}일")
+            for item in itinerary_data:
+                print(f"   Day {item.get('day')}: {item.get('schedule_type')} - {item.get('name')}")
             
             # AI 결과 검증: 일정 배치 규칙이 제대로 지켜졌는지 확인
             if not self._validate_schedule_rules(itinerary_data, duration, selected_farm):
@@ -737,7 +741,8 @@ class SimpleSchedulingService:
 6. **중요**: 농가 데이터의 work_date 필드는 무시하고, 위 규칙에 따라 농가 일정을 배치하세요
 7. **김제지평선축제 특별 배치 (매우 중요!)**: 
    - 김제 지역이고 관광지 목록에 "김제지평선축제"가 있는 경우
-   - 7일 이상 일정에서 반드시 마지막하루전날 15:00에 배치해야 함
+   - 7일 이상 일정에서 반드시 마지막하루전날(duration-1일차) 15:00에 배치해야 함
+   - 마지막날(duration일차)이 아닌 마지막하루전날(duration-1일차)에 배치
    - 다른 관광지보다 절대적 우선권을 가짐
 
 ## 출력 형식 (JSON)
@@ -780,12 +785,12 @@ class SimpleSchedulingService:
         else:
             farm_days = list(range(2, duration - 1))  # 2일차~(마지막-2)일차
         
-        # 필요한 관광지 개수 계산
+        # 필요한 관광지 개수 계산 - 20개 관광지를 충분히 활용
         total_tour_slots = 0
         if duration <= 6:
-            total_tour_slots = 2  # 첫째날 + 마지막날
+            total_tour_slots = 8  # 충분한 관광지 확보 (2개 필요하지만 여유분 포함)
         else:
-            total_tour_slots = 4  # 첫째날(1개) + 마지막하루전날(2개) + 마지막날(1개)
+            total_tour_slots = 15  # 충분한 관광지 확보 (4개 필요하지만 여유분 포함)
         
         # 간단 자연어(pref_etc) 추출
         user_preferences_text = preferences.get('simple_natural_words', [])
@@ -821,7 +826,7 @@ class SimpleSchedulingService:
 5. 사용자가 선택한 관광지는 반드시 포함하세요
 6. 동일한 관광지를 중복 배치하지 마세요
 7. 관광지 배치 개수: {total_tour_slots}개 (5-6일: 2개, 7일이상: 4개)
-8. **김제지평선축제 필수 규칙**: 김제 지역이고 7일 이상 일정이며 김제지평선축제가 관광지 목록에 있다면, 반드시 마지막하루전날 15:00에 배치해야 함
+8. **김제지평선축제 필수 규칙**: 김제 지역이고 7일 이상 일정이며 김제지평선축제가 관광지 목록에 있다면, 반드시 마지막하루전날(duration-1일차) 15:00에 배치해야 함. 마지막날(duration일차)이 아닌 마지막하루전날임을 명심하세요.
 9. 농가 이름은 선택된 농가의 "farm" 필드를, 관광지 이름은 "name" 필드를 정확히 사용하세요
 """
     
@@ -1026,7 +1031,7 @@ class SimpleSchedulingService:
                     return False
                     
                 # 김제 지역에서 김제지평선축제 배치 규칙 확인
-                if selected_farm and "김제" in selected_farm.get("address", ""):
+                if selected_farm and "김제" in selected_farm.get("location", ""):
                     # 전체 일정에서 김제지평선축제가 있는지 확인
                     gimje_festival_available = any('김제지평선축제' in item.get('name', '') for item in itinerary)
                     
@@ -1038,8 +1043,16 @@ class SimpleSchedulingService:
                                 gimje_festival_correct = True
                                 break
                         
+                        # 김제지평선축제가 마지막날에 배치되었는지도 확인 (이는 규칙 위반)
+                        last_day_tours = [item for item in itinerary if item.get('day') == duration and item.get('schedule_type') == '관광지']
+                        gimje_on_last_day = any('김제지평선축제' in item.get('name', '') for item in last_day_tours)
+                        
                         if not gimje_festival_correct:
                             print(f"김제지평선축제 배치 규칙 위반: 마지막하루전날 15:00에 배치되어야 함 (현재 배치: {[item.get('name', '') + ' ' + item.get('start_time', '') for item in second_last_day_tours]})")
+                            return False
+                        
+                        if gimje_on_last_day:
+                            print(f"김제지평선축제 배치 규칙 위반: 마지막날이 아닌 마지막하루전날에 배치되어야 함")
                             return False
             
             return True
@@ -1078,8 +1091,11 @@ class SimpleSchedulingService:
                         tour.get('title', ''))
             print(f"   {i+1}. {tour_name}")
             if '김제지평선축제' in tour_name:
-                gimje_festival = tour
-                print(f"🏆 김제지평선축제 발견!")
+                if gimje_festival is None:  # 첫 번째 김제지평선축제만 사용
+                    gimje_festival = tour
+                    print(f"🏆 김제지평선축제 발견!")
+                else:
+                    print(f"🔄 김제지평선축제 중복 제거")
             else:
                 other_tours.append(tour)
         
@@ -1101,24 +1117,40 @@ class SimpleSchedulingService:
                 tour_index += 1
             
             # 두 번째 일정 (15:00) - 김제지평선축제 우선
-            if region == "김제시" and gimje_festival:
+            print(f"🔍 김제지평선축제 배치 조건 확인:")
+            print(f"   selected_farm: {bool(selected_farm)}")
+            print(f"   김제 주소 포함: {'김제' in selected_farm.get('location', '') if selected_farm else False}")
+            print(f"   gimje_festival: {bool(gimje_festival)}")
+            
+            if selected_farm and "김제" in selected_farm.get("location", "") and gimje_festival:
                 print(f"🏆 김제지평선축제를 마지막하루전날 15:00에 배치")
                 tours_for_second_last.append({"tour": gimje_festival, "time": "15:00"})
                 gimje_festival = None  # 사용했으므로 제거
             elif other_tours and tour_index < len(other_tours):
-                print(f"⚠️ 김제 지역이지만 김제지평선축제가 없거나 이미 사용됨")
+                print(f"🔄 일반 관광지를 마지막하루전날 15:00에 배치: {other_tours[tour_index].get('name', '이름없음')}")
                 tours_for_second_last.append({"tour": other_tours[tour_index], "time": "15:00"})
                 tour_index += 1
+                if selected_farm and "김제" in selected_farm.get("location", ""):
+                    print(f"⚠️ 김제 지역이지만 김제지평선축제가 없거나 이미 사용됨")
             
             if tours_for_second_last:
                 tour_schedule[duration - 1] = tours_for_second_last
         
         # 마지막날 관광지
+        print(f"🔍 마지막날 관광지 배치 확인: other_tours={len(other_tours)}개, tour_index={tour_index}")
         if other_tours and tour_index < len(other_tours):
+            print(f"🏁 마지막날 관광지 배치: {other_tours[tour_index].get('name', '이름없음')}")
             tour_schedule[duration] = [{"tour": other_tours[tour_index], "time": "10:00"}]
             tour_index += 1
-        elif gimje_festival:  # 아직 배치되지 않은 김제지평선축제가 있다면
-            tour_schedule[duration] = [{"tour": gimje_festival, "time": "10:00"}]
+        else:
+            # 관광지가 부족한 경우 추가 관광지 찾기
+            print(f"🔍 마지막날 관광지 부족, 추가 관광지 검색 중...")
+            additional_tours = self._get_additional_tours_for_schedule(region, preferences, 1)
+            if additional_tours:
+                print(f"🏁 추가 관광지 배치: {additional_tours[0].get('name', '이름없음')}")
+                tour_schedule[duration] = [{"tour": additional_tours[0], "time": "10:00"}]
+            else:
+                print(f"❌ 추가 관광지를 찾을 수 없어 마지막날 일정 누락")
         
         # 일정 생성
         for day in range(1, duration + 1):
@@ -1191,6 +1223,10 @@ class SimpleSchedulingService:
                         "start_time": start_time,
                         "address": tour_address
                     })
+        
+        print(f"🎯 규칙 기반 일정 생성 완료: 총 {len(itinerary)}개 일정, 예상 일수 {duration}일")
+        for item in itinerary:
+            print(f"   Day {item.get('day')}: {item.get('schedule_type')} - {item.get('name')}")
         
         schedule_text = self._format_itinerary_as_text(itinerary)
         bubble_schedule = self._format_bubble_friendly_schedule(itinerary, duration)

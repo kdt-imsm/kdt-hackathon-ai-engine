@@ -1295,6 +1295,11 @@ async function confirmCurrentSchedule() {
     await confirmSchedule();
     addMsg("일정을 확정했어요. 홈 화면의 캘린더에서 확인하실 수 있습니다!");
     updateHomeCalendar();
+    
+    // 일정 확정 후 홈 화면으로 즉시 이동
+    STATE.tab = "home";
+    render();
+    
   } catch (e) {
     console.error(e);
     alert("확정에 실패했습니다.");

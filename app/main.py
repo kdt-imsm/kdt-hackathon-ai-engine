@@ -167,7 +167,7 @@ def create_schedule(request: Dict[str, Any] = Body(...)):
         # 농가 주소에서 지역 추출
         region = None
         if selected_farm:
-            farm_address = selected_farm.get("address", "")
+            farm_address = selected_farm.get("location", "")
             for r in ["김제시", "전주시", "군산시", "익산시", "정읍시", "남원시", "고창군", "부안군", "임실군", "순창군", "진안군", "무주군", "장수군", "완주군"]:
                 if r in farm_address:
                     region = r
@@ -549,7 +549,7 @@ def create_schedule_with_user(request: Dict[str, Any] = Body(...)):
         # 농가 주소에서 지역 추출
         region = None
         if selected_farm:
-            farm_address = selected_farm.get("address", "")
+            farm_address = selected_farm.get("location", "")
             for r in ["김제시", "전주시", "군산시", "익산시", "정읍시", "남원시", "고창군", "부안군", "임실군", "순창군", "진안군", "무주군", "장수군", "완주군"]:
                 if r in farm_address:
                     region = r
@@ -712,6 +712,76 @@ def get_user_schedules(user_id: str):
         "status": "success",
         "data": user_schedules
     }
+
+@app.post("/confirm")
+def confirm_itinerary(request: Dict[str, Any] = Body(...)):
+    """
+    일정 확정 API
+    
+    요청 형식:
+    {
+        "user_id": "user_1234567890",
+        "itinerary_id": "schedule_20250831_143000",
+        "calendar_events": [...] // optional
+    }
+    """
+    try:
+        user_id = request.get("user_id", "")
+        itinerary_id = request.get("itinerary_id", "")
+        calendar_events = request.get("calendar_events", [])
+        
+        print(f"✅ 일정 확정 요청: user_id={user_id}, itinerary_id={itinerary_id}")
+        
+        # 일정 존재 여부 확인
+        if itinerary_id and itinerary_id in schedules_storage:
+            schedule_data = schedules_storage[itinerary_id]
+            print(f"일정 찾음: {itinerary_id}")
+        elif user_id:
+            # user_id로 최근 일정 찾기
+            user_schedules = []
+            for iid, schedule_data in schedules_storage.items():
+                if schedule_data.get("user_id") == user_id:
+                    user_schedules.append((iid, schedule_data))
+            
+            if user_schedules:
+                itinerary_id, schedule_data = max(user_schedules, key=lambda x: x[0])
+                print(f"사용자의 최근 일정 찾음: {itinerary_id}")
+            else:
+                print(f"사용자 {user_id}의 일정을 찾을 수 없음")
+                schedule_data = None
+        else:
+            schedule_data = None
+        
+        # 성공 응답
+        response_data = {
+            "status": "success",
+            "message": "일정이 확정되었습니다.",
+            "itinerary_id": itinerary_id,
+            "user_id": user_id
+        }
+        
+        # 일정 데이터가 있으면 요약 정보 추가
+        if schedule_data and "schedule" in schedule_data:
+            schedule_info = schedule_data["schedule"]
+            if "summary" in schedule_info:
+                response_data["summary"] = {
+                    "duration": schedule_info["summary"].get("duration", 0),
+                    "region": schedule_info["summary"].get("region", ""),
+                    "total_days": schedule_info.get("total_days", 0)
+                }
+        
+        print(f"✅ 일정 확정 완료: {response_data}")
+        return JSONResponse(content=response_data)
+        
+    except Exception as e:
+        print(f"❌ 일정 확정 API 오류: {e}")
+        return JSONResponse(
+            status_code=500, 
+            content={
+                "status": "error", 
+                "message": f"일정 확정 중 오류: {str(e)}"
+            }
+        )
 
 # 루트 경로 (API 문서 안내)
 @app.get("/")
