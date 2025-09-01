@@ -103,7 +103,20 @@ def fetch_detail_image(contentid: str, max_retries: int = 3) -> Optional[str]:
             r = CLIENT.get(url, params=params)
             r.raise_for_status()
             
-            data = r.json()
+            # JSON 파싱 전에 응답 내용 확인
+            response_text = r.text
+            if not response_text.strip():
+                print(f"  ContentID {contentid}: 빈 응답")
+                return None
+                
+            try:
+                data = r.json()
+            except Exception as json_error:
+                print(f"  ContentID {contentid}: JSON 파싱 실패 - {json_error}")
+                print(f"  응답 내용 일부: {response_text[:200]}")
+                # API 한도 초과 등의 경우 빈 문자열 반환하여 계속 진행
+                return ""
+                
             body = data["response"]["body"]
             
             items_field = body.get("items")

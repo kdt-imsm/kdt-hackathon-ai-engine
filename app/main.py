@@ -3,10 +3,12 @@
 전북 지역 농촌 일여행 추천 및 일정 생성 API
 """
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from pathlib import Path
 from typing import Dict, List, Any
 
@@ -29,6 +31,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 모든 요청 로깅 미들웨어
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # /api/onboarding 요청인 경우 상세 로깅
+    if request.url.path == "/api/onboarding":
+        print(f"\n{'='*60}")
+        print(f"📨 Incoming Request to /api/onboarding")
+        print(f"   Method: {request.method}")
+        print(f"   Headers: {dict(request.headers)}")
+        
+        # Body 복사본 만들기 (한 번만 읽을 수 있으므로)
+        body = await request.body()
+        print(f"   Raw Body: {body.decode() if body else 'Empty'}")
+        print(f"{'='*60}\n")
+        
+        # Request 객체 재생성 (body를 읽었으므로)
+        from starlette.datastructures import Headers
+        from starlette.requests import Request as StarletteRequest
+        
+        async def receive():
+            return {"type": "http.request", "body": body}
+        
+        request = StarletteRequest(request.scope, receive)
+    
+    response = await call_next(request)
+    return response
+
+# Validation 에러 핸들러 추가
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    # 에러 상세 정보 로깅
+    print(f"\n{'='*60}")
+    print(f"❌ VALIDATION ERROR DETAILS:")
+    print(f"   URL: {request.url}")
+    print(f"   Method: {request.method}")
+    print(f"   Validation Errors: {exc.errors()}")
+    print(f"   Body Received: {exc.body}")
+    print(f"{'='*60}\n")
+    
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "body": str(exc.body),
+            "message": "Request validation failed. Check server logs for details."
+        }
+    )
 
 # 정적 파일 서빙 (이미지 등)
 project_root = Path(__file__).parent.parent
@@ -123,9 +173,18 @@ def create_schedule(request: Dict[str, Any] = Body(...)):
                     region = r
                     break
         
+        # 스코어링된 관광지 데이터와 추천 카드 ID 추출
+        scored_attractions = request.get("scored_attractions", [])
+        recommended_tour_ids = []
+        if "tour_spots" in request:
+            recommended_tour_ids = [tour.get("tour_id") for tour in request["tour_spots"]]
+        
+        print(f"📊 스코어링 데이터: {len(scored_attractions)}개, 추천 카드: {len(recommended_tour_ids)}개")
+        
         # 일정 생성 서비스 호출
         result = scheduling_service.generate_schedule(
-            natural_request, selected_farm, selected_tours, preferences, region
+            natural_request, selected_farm, selected_tours, preferences, region,
+            scored_attractions, recommended_tour_ids
         )
         
         if result["status"] == "success":
@@ -188,6 +247,78 @@ def update_schedule_feedback_with_id(itinerary_id: str, request: Dict[str, Any] 
         print(f"❌ 피드백 처리 API 오류: {e}")
         raise HTTPException(status_code=500, detail=f"피드백 처리 중 오류: {str(e)}")
 
+@app.post("/api/schedule/{itinerary_id}/summary")
+def generate_travel_summary(itinerary_id: str):
+    """
+    일정 확정 후 매력적인 일여행 요약 생성 API
+    
+    사용자가 일정 확정 버튼을 누르면 AI가 개인화된 여행 요약을 생성합니다.
+    """
+    try:
+        # 기존 일정 조회
+        if itinerary_id not in schedules_storage:
+            raise HTTPException(status_code=404, detail="일정을 찾을 수 없습니다.")
+        
+        schedule_data = schedules_storage[itinerary_id]
+        itinerary_data = schedule_data["schedule"]["itinerary"]
+        original_request = schedule_data["original_request"]
+        
+        # 지역 정보 추출
+        region = None
+        if original_request.get("selected_farm"):
+            farm_address = original_request["selected_farm"].get("address", "")
+            for r in ["김제시", "전주시", "군산시", "익산시", "정읍시", "남원시", "고창군", "부안군", "임실군", "순창군", "진안군", "무주군", "장수군", "완주군"]:
+                if r in farm_address:
+                    region = r
+                    break
+        
+        if not region:
+            region = "전북"
+        
+        print(f"🎨 일여행 요약 생성 요청: {itinerary_id} ({region})")
+        
+        # AI 요약 생성
+        result = scheduling_service.generate_travel_summary(
+            itinerary_data=itinerary_data,
+            natural_request=original_request.get("natural_request", ""),
+            user_preferences=original_request.get("preferences", {}),
+            region=region
+        )
+        
+        return JSONResponse(content=result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ 여행 요약 생성 API 오류: {e}")
+        raise HTTPException(status_code=500, detail=f"여행 요약 생성 중 오류: {str(e)}")
+
+@app.post("/api/onboarding/debug")
+async def debug_onboarding(request: Request):
+    """온보딩 디버그 엔드포인트 - raw 요청 확인용"""
+    try:
+        body = await request.body()
+        body_str = body.decode()
+        print(f"📥 Raw 온보딩 요청 바디: {body_str}")
+        
+        import json
+        try:
+            body_json = json.loads(body_str) if body_str else {}
+            print(f"📥 파싱된 JSON: {body_json}")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON 파싱 에러: {e}")
+            body_json = {}
+        
+        return JSONResponse(content={
+            "status": "debug",
+            "raw_body": body_str,
+            "parsed_json": body_json,
+            "message": "디버그 정보를 터미널에서 확인하세요"
+        })
+    except Exception as e:
+        print(f"❌ 디버그 에러: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 @app.post("/api/onboarding")
 def create_user_onboarding(request: OnboardingRequest = Body(...)):
     """
@@ -197,18 +328,30 @@ def create_user_onboarding(request: OnboardingRequest = Body(...)):
     온보딩 과정: 누구와 → 풍경 선호도 → 여행 스타일 → 체험 유형 → 추가 요청
     """
     try:
+        # 디버깅: 받은 데이터 로깅
+        print(f"📥 온보딩 요청 데이터: {request.model_dump()}")
+        
+        # 기본값 처리 (빈 값인 경우 기본값 설정)
+        name = request.name or "사용자"
+        age = request.age or "25"
+        gender = request.gender or "미정"
+        sido = request.sido or "전북"
+        sigungu = request.sigungu or "전주시"
+        with_whom = request.with_whom or "혼자"
+        real_name = request.real_name or "사용자"
+        
         # User2 데이터 구조로 변환
         user_data = BubbleUser2(
-            address=f"{request.sido} {request.sigungu}",
-            age=request.age,
-            gender=request.gender,
-            name=request.name,
+            address=f"{sido} {sigungu}",
+            age=age,
+            gender=gender,
+            name=name,
             pref_etc=request.additional_requests,  # 6단계 서술형 (5개 칸)
             pref_jobs=request.selected_jobs,        # 5단계 체험 유형
             pref_style=request.selected_styles,     # 4단계 여행 스타일
             pref_view=request.selected_views,       # 3단계 풍경 선호도
-            real_name=request.real_name,
-            with_whom=request.with_whom             # 2단계 누구와
+            real_name=real_name,
+            with_whom=with_whom                     # 2단계 누구와
         )
         
         # 사용자 ID 생성 (실제로는 UUID 등 사용)
@@ -258,13 +401,16 @@ def get_recommendations_with_user(request: Dict[str, Any] = Body(...)):
         user_id = request.get("user_id", "")
         natural_request = request.get("natural_request", "")
         
-        if not user_id or not natural_request:
-            raise HTTPException(status_code=400, detail="user_id와 natural_request는 필수입니다.")
+        if not natural_request:
+            raise HTTPException(status_code=400, detail="natural_request는 필수입니다.")
         
         # 해커톤용: 사용자 데이터 조회 또는 기본값 사용
-        if user_id not in users_storage:
+        if not user_id or user_id not in users_storage:
             # 해커톤용 기본 사용자 데이터 (사용자가 없어도 작동)
-            print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            if user_id:
+                print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            else:
+                print(f"⚠️  user_id가 제공되지 않아 기본 선호도 사용")
             user_data = BubbleUser2(
                 address="전국",
                 age="25",
@@ -360,16 +506,19 @@ def create_schedule_with_user(request: Dict[str, Any] = Body(...)):
         selected_farm = request.get("selected_farm", {})
         selected_tours = request.get("selected_tours", [])
         
-        if not user_id or not natural_request:
-            raise HTTPException(status_code=400, detail="user_id와 natural_request는 필수입니다.")
+        if not natural_request:
+            raise HTTPException(status_code=400, detail="natural_request는 필수입니다.")
         
         if not selected_farm:
             raise HTTPException(status_code=400, detail="농가를 1개 선택해야 합니다.")
         
         # 해커톤용: 사용자 데이터 조회 또는 기본값 사용
-        if user_id not in users_storage:
+        if not user_id or user_id not in users_storage:
             # 해커톤용 기본 사용자 데이터 (사용자가 없어도 작동)
-            print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            if user_id:
+                print(f"⚠️  사용자 {user_id}를 찾을 수 없어 기본 선호도 사용")
+            else:
+                print(f"⚠️  user_id가 제공되지 않아 기본 선호도 사용")
             user_data = BubbleUser2(
                 address="전국",
                 age="25",
@@ -394,6 +543,8 @@ def create_schedule_with_user(request: Dict[str, Any] = Body(...)):
         }
         
         print(f"📅 사용자 기반 일정 생성: {user_data.name} - {natural_request}")
+        print(f"🚜 선택된 농가: {selected_farm}")
+        print(f"🏞️ 선택된 관광지: {selected_tours}")
         
         # 농가 주소에서 지역 추출
         region = None
@@ -404,9 +555,28 @@ def create_schedule_with_user(request: Dict[str, Any] = Body(...)):
                     region = r
                     break
         
+        # 사용자 선호도 기반으로 스코어링된 관광지 데이터 생성
+        scored_attractions = None
+        recommended_tour_ids = []
+        
+        try:
+            # 추천 서비스에서 스코어링된 관광지 가져오기
+            recommendation_result = recommendation_service.get_recommendations(natural_request, preferences)
+            if recommendation_result["status"] == "success" and "data" in recommendation_result:
+                data = recommendation_result["data"]
+                if "scored_attractions" in data:
+                    scored_attractions = data["scored_attractions"]
+                    recommended_tour_ids = [tour.get("tour_id") for tour in data["tour_spots"]]
+                    print(f"🎯 스코어링된 관광지 데이터 활용: {len(scored_attractions)}개, 추천 카드: {len(recommended_tour_ids)}개")
+                else:
+                    print(f"⚠️  추천 결과에서 scored_attractions 필드 없음")
+        except Exception as e:
+            print(f"⚠️  스코어링 데이터 생성 실패, 기본 로직 사용: {e}")
+        
         # 일정 생성 서비스 호출
         result = scheduling_service.generate_schedule(
-            natural_request, selected_farm, selected_tours, preferences, region
+            natural_request, selected_farm, selected_tours, preferences, region,
+            scored_attractions, recommended_tour_ids
         )
         
         if result["status"] == "success":

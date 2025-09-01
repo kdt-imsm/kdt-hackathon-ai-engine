@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from app.embeddings.openai_service import OpenAIService
 from app.services.detail_loader import fetch_detail_image
+from app.utils.attraction_scoring import get_attractions_for_schedule
 
 class SimpleSchedulingService:
     def __init__(self):
@@ -358,7 +359,9 @@ class SimpleSchedulingService:
                          selected_farm: Dict[str, Any],
                          selected_tours: List[Dict[str, Any]],
                          preferences: Dict[str, Any],
-                         region: str = None) -> Dict[str, Any]:
+                         region: str = None,
+                         scored_attractions: List[Dict[str, Any]] = None,
+                         recommended_tour_ids: List[str] = None) -> Dict[str, Any]:
         """
         LLM 강화 일정 생성 시스템
         
@@ -369,6 +372,8 @@ class SimpleSchedulingService:
         """
         
         print(f"🧠 LLM 기반 일정 생성 시작: {natural_request}")
+        print(f"📋 전달받은 선택된 농가 데이터: {selected_farm}")
+        print(f"📋 전달받은 선택된 관광지 데이터: {selected_tours}")
         
         # LLM으로 자연어 의도 추출 (기간 정보 포함)
         extracted_intent = self.openai_service.extract_intent_from_natural_text(natural_request)
@@ -402,37 +407,137 @@ class SimpleSchedulingService:
         else:
             total_tour_slots = 4  # 첫째날(1개) + 마지막하루전날(2개) + 마지막날(1개)
         
-        # 추가 관광지 필요 시 로드 (카드 추천과는 다른 관광지들)
+        # 새로운 스코어링 시스템을 활용한 추가 관광지 선택
         all_tours_for_schedule = selected_tours.copy()
-        if len(selected_tours) < total_tour_slots and region:
+        if len(selected_tours) < total_tour_slots:
             additional_needed = total_tour_slots - len(selected_tours)
             
-            # 기존 카드 추천에서 제외된 관광지들을 가져오기 위해
-            # 전체 지역 데이터에서 이미 카드로 제시된 것들과 사용자가 선택한 것들을 제외
-            additional_tours = self._get_additional_attractions(region, selected_tours, preferences, additional_needed)
-            
-            # 추가 관광지를 선택된 관광지와 동일한 형식으로 변환
-            for tour in additional_tours:
-                region_name = tour.get("region", "")
-                address_full = tour.get("address_full", "")
-                addr1 = tour.get("addr1", "")
+            if scored_attractions:
+                print(f"🎯 스코어링된 관광지 활용: {len(scored_attractions)}개 중에서 추가 선택")
                 
-                display_address = ""
-                if addr1 and addr1 != "전북특별자치도":
-                    display_address = addr1
-                elif region_name and region_name != "전북특별자치도":
-                    display_address = f"전북 {region_name}"
-                elif address_full and address_full != "전북특별자치도":
-                    display_address = address_full
+                # 사용자가 선택한 관광지 ID 추출
+                selected_tour_ids = {tour.get("tour_id") for tour in selected_tours}
+                
+                # 추천되었지만 선택되지 않은 관광지 ID 추출
+                recommended_but_not_selected = set(recommended_tour_ids or []) - selected_tour_ids
+                
+                # scored_attractions를 AttractionScore 형태로 변환
+                from app.utils.attraction_scoring import AttractionScore
+                attraction_scores = []
+                for attr in scored_attractions:
+                    score_obj = AttractionScore(
+                        name=attr['name'],
+                        region=attr['region'],
+                        address_full=attr['address_full'],
+                        lat=attr['lat'],
+                        lon=attr['lon'],
+                        contentid=attr['contentid'],
+                        landscape_keywords=attr.get('landscape_keywords'),
+                        travel_style_keywords=attr.get('travel_style_keywords'),
+                        score=attr.get('_score', 0.0),
+                        travel_style_matches=0,  # 재계산 불필요
+                        landscape_match=False    # 재계산 불필요
+                    )
+                    attraction_scores.append(score_obj)
+                
+                # 김제 지역이면 김제지평선축제 우선 처리
+                if region == "김제시":
+                    gimje_festival_attr = None
+                    other_attrs = []
+                    
+                    for attr in attraction_scores:
+                        if '김제지평선축제' in attr.name:
+                            gimje_festival_attr = attr
+                        else:
+                            other_attrs.append(attr)
+                    
+                    # 김제지평선축제가 선택되지 않았고 추가가 필요하면 최우선 추가
+                    if (gimje_festival_attr and 
+                        gimje_festival_attr.contentid not in selected_tour_ids and 
+                        additional_needed > 0):
+                        
+                        display_address = f"전북 {gimje_festival_attr.region}" if gimje_festival_attr.region else "주소 정보 없음"
+                        all_tours_for_schedule.append({
+                            "tour_id": gimje_festival_attr.contentid,
+                            "name": gimje_festival_attr.name,
+                            "address": display_address,
+                            "photo": next((sa.get("image_url", "") for sa in scored_attractions if sa["contentid"] == gimje_festival_attr.contentid), "")
+                        })
+                        additional_needed -= 1
+                        print(f"🏆 김제지평선축제 우선 추가됨")
+                    
+                    # 나머지 필요한 관광지 선택
+                    if additional_needed > 0:
+                        selected_attractions = get_attractions_for_schedule(
+                            other_attrs,  # 김제지평선축제 제외
+                            selected_tour_ids | {gimje_festival_attr.contentid} if gimje_festival_attr else selected_tour_ids,
+                            recommended_but_not_selected,
+                            total_needed=additional_needed
+                        )
+                        
+                        # 추가 관광지를 일정용 포맷으로 변환
+                        for attr in selected_attractions:
+                            if attr.contentid not in selected_tour_ids:
+                                display_address = f"전북 {attr.region}" if attr.region else "주소 정보 없음"
+                                
+                                all_tours_for_schedule.append({
+                                    "tour_id": attr.contentid,
+                                    "name": attr.name,
+                                    "address": display_address,
+                                    "photo": next((sa.get("image_url", "") for sa in scored_attractions if sa["contentid"] == attr.contentid), "")
+                                })
                 else:
-                    display_address = f"전북 {region_name}" if region_name else "주소 정보 없음"
+                    # 김제가 아닌 지역: 기존 로직
+                    selected_attractions = get_attractions_for_schedule(
+                        attraction_scores,
+                        selected_tour_ids,
+                        recommended_but_not_selected,
+                        total_needed=total_tour_slots
+                    )
+                    
+                    # 추가 관광지를 일정용 포맷으로 변환
+                    for attr in selected_attractions:
+                        if attr.contentid not in selected_tour_ids:
+                            display_address = f"전북 {attr.region}" if attr.region else "주소 정보 없음"
+                            
+                            all_tours_for_schedule.append({
+                                "tour_id": attr.contentid,
+                                "name": attr.name,
+                                "address": display_address,
+                                "photo": next((sa.get("image_url", "") for sa in scored_attractions if sa["contentid"] == attr.contentid), "")
+                            })
+                        
+                        if len(all_tours_for_schedule) >= total_tour_slots:
+                            break
                 
-                all_tours_for_schedule.append({
-                    "tour_id": tour.get("contentid", f"additional_{len(all_tours_for_schedule)}"),
-                    "name": tour.get("name", ""),
-                    "address": display_address,
-                    "photo": tour.get("image_url", "")
-                })
+                print(f"✅ 총 {len(all_tours_for_schedule)}개 관광지 확정")
+            
+            # 폴백: 기존 로직 사용 (scored_attractions가 없는 경우)
+            elif region and len(all_tours_for_schedule) < total_tour_slots:
+                print(f"⚠️ 스코어링 데이터 없음, 기존 로직 사용")
+                additional_tours = self._get_additional_attractions(region, selected_tours, preferences, additional_needed)
+                
+                for tour in additional_tours:
+                    region_name = tour.get("region", "")
+                    address_full = tour.get("address_full", "")
+                    addr1 = tour.get("addr1", "")
+                    
+                    display_address = ""
+                    if addr1 and addr1 != "전북특별자치도":
+                        display_address = addr1
+                    elif region_name and region_name != "전북특별자치도":
+                        display_address = f"전북 {region_name}"
+                    elif address_full and address_full != "전북특별자치도":
+                        display_address = address_full
+                    else:
+                        display_address = f"전북 {region_name}" if region_name else "주소 정보 없음"
+                    
+                    all_tours_for_schedule.append({
+                        "tour_id": tour.get("contentid", f"additional_{len(all_tours_for_schedule)}"),
+                        "name": tour.get("name", ""),
+                        "address": display_address,
+                        "photo": tour.get("image_url", "")
+                    })
         
         # AI 일정 생성 프롬프트
         system_prompt = self._build_system_prompt(duration)
@@ -500,6 +605,119 @@ class SimpleSchedulingService:
             # 폴백: 규칙 기반 일정 생성
             return self._generate_rule_based_schedule(duration, start_date_str, start_date_obj, selected_farm, all_tours_for_schedule, region)
     
+    def generate_travel_summary(self, 
+                               itinerary_data: List[Dict], 
+                               natural_request: str,
+                               user_preferences: Dict[str, Any],
+                               region: str) -> Dict[str, Any]:
+        """
+        확정된 일정을 바탕으로 매력적인 일여행 요약 생성
+        
+        Args:
+            itinerary_data: 확정된 일정 데이터
+            natural_request: 사용자의 원본 자연어 요청
+            user_preferences: 사용자 선호도 (간단 자연어 포함)
+            region: 여행 지역
+        
+        Returns:
+            AI가 생성한 매력적인 여행 요약
+        """
+        
+        print(f"🎨 일여행 요약 생성 시작: {region} {len(itinerary_data)}일 일정")
+        
+        # 사용자 선호 키워드 추출
+        user_keywords = user_preferences.get('simple_natural_words', [])
+        travel_styles = user_preferences.get('travel_style_keywords', [])
+        landscape_prefs = user_preferences.get('landscape_keywords', [])
+        
+        # 일정에서 주요 정보 추출
+        farm_activities = []
+        tourist_spots = []
+        
+        for day in itinerary_data:
+            if day.get('schedule_type') == '농가':
+                farm_activities.append({
+                    'day': day.get('day'),
+                    'name': day.get('name'),
+                    'date': day.get('date')
+                })
+            elif day.get('schedule_type') == '관광지':
+                tourist_spots.append({
+                    'day': day.get('day'),
+                    'name': day.get('name'),
+                    'date': day.get('date')
+                })
+        
+        system_prompt = f"""
+당신은 농촌 일여행 전문 여행 에디터입니다. 
+확정된 일정을 바탕으로 사용자가 설레고 기대되는 매력적인 여행 요약을 작성해주세요.
+
+## 작성 가이드라인
+1. **친근하고 설레게 하는 톤앤매너** 사용
+2. **구체적인 체험 포인트**와 **특별한 매력** 강조  
+3. **사용자 선호도**를 자연스럽게 반영
+4. **이모지 활용**으로 시각적 매력도 향상
+5. **실용적인 팁**도 포함 (포토스팟, 추천 시간대 등)
+
+## 출력 형식
+- 제목: 지역명 + 매력적인 카피
+- 본문: 3-4개 섹션으로 구성
+- 길이: 200-300자 내외 (너무 길지 않게)
+- 마무리: 격려와 기대감 조성
+"""
+        
+        user_prompt = f"""
+## 확정된 {region} 일여행 정보
+
+**사용자 요청**: "{natural_request}"
+**선호 키워드**: {user_keywords}
+**여행 스타일**: {travel_styles}
+**선호 풍경**: {landscape_prefs}
+
+**농가 체험 활동**:
+{farm_activities}
+
+**관광지 방문**:
+{tourist_spots}
+
+위 정보를 바탕으로 사용자가 정말 기대되고 설레는 일여행 요약을 작성해주세요!
+"""
+        
+        try:
+            response = self.openai_service.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,  # 창의적인 표현을 위해 조금 높게
+                max_tokens=800
+            )
+            
+            summary_text = response.choices[0].message.content
+            
+            return {
+                "status": "success",
+                "data": {
+                    "summary": summary_text,
+                    "region": region,
+                    "total_days": len(set(day.get('day') for day in itinerary_data)),
+                    "highlights": {
+                        "farm_count": len(farm_activities),
+                        "tourist_count": len(tourist_spots),
+                        "user_keywords": user_keywords
+                    }
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ 일여행 요약 생성 실패: {e}")
+            return {
+                "status": "error",
+                "message": "여행 요약 생성 중 오류가 발생했습니다.",
+                "error": str(e)
+            }
+    
     def _build_system_prompt(self, duration: int) -> str:
         """AI 일정 생성 시스템 프롬프트"""
         return f"""
@@ -517,7 +735,10 @@ class SimpleSchedulingService:
 4. **농가 시간**: 선택된 농가의 start_time, end_time 사용
 5. **관광지 중복 금지**: 동일한 관광지를 여러 번 배치하지 마세요
 6. **중요**: 농가 데이터의 work_date 필드는 무시하고, 위 규칙에 따라 농가 일정을 배치하세요
-7. **김제지평선축제 특별 배치**: 김제 지역의 경우 김제지평선축제는 7일 이상 일정에서 마지막하루전날 15:00에 우선 배치
+7. **김제지평선축제 특별 배치 (매우 중요!)**: 
+   - 김제 지역이고 관광지 목록에 "김제지평선축제"가 있는 경우
+   - 7일 이상 일정에서 반드시 마지막하루전날 15:00에 배치해야 함
+   - 다른 관광지보다 절대적 우선권을 가짐
 
 ## 출력 형식 (JSON)
 ```json
@@ -566,12 +787,16 @@ class SimpleSchedulingService:
         else:
             total_tour_slots = 4  # 첫째날(1개) + 마지막하루전날(2개) + 마지막날(1개)
         
+        # 간단 자연어(pref_etc) 추출
+        user_preferences_text = preferences.get('simple_natural_words', [])
+        
         return f"""
 ## 일정 생성 요청
 - 자연어 요청: "{natural_request}"
 - 기간: {duration}일
 - 시작날짜: {start_date_str}
-- 사용자 선호도: {preferences}
+- 사용자 선호 키워드: {user_preferences_text}
+- 전체 사용자 선호도: {preferences}
 
 ## 날짜 정보
 {json.dumps(schedule_dates, ensure_ascii=False, indent=2)}
@@ -596,6 +821,8 @@ class SimpleSchedulingService:
 5. 사용자가 선택한 관광지는 반드시 포함하세요
 6. 동일한 관광지를 중복 배치하지 마세요
 7. 관광지 배치 개수: {total_tour_slots}개 (5-6일: 2개, 7일이상: 4개)
+8. **김제지평선축제 필수 규칙**: 김제 지역이고 7일 이상 일정이며 김제지평선축제가 관광지 목록에 있다면, 반드시 마지막하루전날 15:00에 배치해야 함
+9. 농가 이름은 선택된 농가의 "farm" 필드를, 관광지 이름은 "name" 필드를 정확히 사용하세요
 """
     
     def _format_itinerary_as_text(self, itinerary: List[Dict[str, Any]]) -> str:
@@ -797,6 +1024,23 @@ class SimpleSchedulingService:
                 if len(second_last_day_tours) != 2:
                     print(f"마지막하루전날 관광지 2개 규칙 위반: {len(second_last_day_tours)}개")
                     return False
+                    
+                # 김제 지역에서 김제지평선축제 배치 규칙 확인
+                if selected_farm and "김제" in selected_farm.get("address", ""):
+                    # 전체 일정에서 김제지평선축제가 있는지 확인
+                    gimje_festival_available = any('김제지평선축제' in item.get('name', '') for item in itinerary)
+                    
+                    if gimje_festival_available:
+                        # 김제지평선축제가 마지막하루전날 15:00에 배치되었는지 확인
+                        gimje_festival_correct = False
+                        for item in second_last_day_tours:
+                            if '김제지평선축제' in item.get('name', '') and item.get('start_time') == '15:00':
+                                gimje_festival_correct = True
+                                break
+                        
+                        if not gimje_festival_correct:
+                            print(f"김제지평선축제 배치 규칙 위반: 마지막하루전날 15:00에 배치되어야 함 (현재 배치: {[item.get('name', '') + ' ' + item.get('start_time', '') for item in second_last_day_tours]})")
+                            return False
             
             return True
             
@@ -805,7 +1049,7 @@ class SimpleSchedulingService:
             return False
     
     def _generate_rule_based_schedule(self, duration: int, start_date_str: str, start_date_obj: datetime,
-                                    selected_farm: Dict, selected_tours: List[Dict], region: str = None) -> Dict[str, Any]:
+                                    selected_farm: Dict, all_tours_for_schedule: List[Dict], region: str = None) -> Dict[str, Any]:
         """규칙 기반 폴백 일정 생성"""
         
         itinerary = []
@@ -823,9 +1067,19 @@ class SimpleSchedulingService:
         # 김제지평선축제 특별 처리 (마지막 하루 전날 15:00에 배치)
         gimje_festival = None
         other_tours = []
-        for tour in selected_tours:
-            if '김제지평선축제' in tour.get('name', ''):
+        
+        print(f"🔍 전체 일정용 관광지 목록 ({len(all_tours_for_schedule)}개):")
+        for i, tour in enumerate(all_tours_for_schedule):
+            # 중첩 구조 처리
+            tour_data = tour.get("raw") or tour
+            tour_name = (tour_data.get('name') or 
+                        tour_data.get('tour_name') or 
+                        tour_data.get('title') or
+                        tour.get('title', ''))
+            print(f"   {i+1}. {tour_name}")
+            if '김제지평선축제' in tour_name:
                 gimje_festival = tour
+                print(f"🏆 김제지평선축제 발견!")
             else:
                 other_tours.append(tour)
         
@@ -848,9 +1102,11 @@ class SimpleSchedulingService:
             
             # 두 번째 일정 (15:00) - 김제지평선축제 우선
             if region == "김제시" and gimje_festival:
+                print(f"🏆 김제지평선축제를 마지막하루전날 15:00에 배치")
                 tours_for_second_last.append({"tour": gimje_festival, "time": "15:00"})
                 gimje_festival = None  # 사용했으므로 제거
             elif other_tours and tour_index < len(other_tours):
+                print(f"⚠️ 김제 지역이지만 김제지평선축제가 없거나 이미 사용됨")
                 tours_for_second_last.append({"tour": other_tours[tour_index], "time": "15:00"})
                 tour_index += 1
             
@@ -872,13 +1128,35 @@ class SimpleSchedulingService:
             
             if day in farm_days and selected_farm:
                 # 농가 일정 (work_date 완전 무시)
+                print(f"🚜 농가 데이터 확인: {selected_farm}")
+                
+                # 중첩된 구조 확인 (raw 필드가 있는 경우)
+                farm_data = selected_farm.get("raw") or selected_farm
+                print(f"🚜 실제 농가 데이터: {farm_data}")
+                
+                # 다양한 필드명에서 농가명 추출 시도
+                farm_name = (farm_data.get("farm") or 
+                           farm_data.get("name") or 
+                           farm_data.get("title") or 
+                           farm_data.get("farm_name") or
+                           selected_farm.get("title") or  # 최상위 레벨도 확인
+                           "농가명 미정")
+                
+                farm_address = (farm_data.get("address") or 
+                              farm_data.get("addr1") or 
+                              farm_data.get("location") or
+                              selected_farm.get("location") or  # 최상위 레벨도 확인
+                              "주소 미정")
+                
+                print(f"🚜 농가 일정 생성: {farm_name} at {farm_address}")
+                
                 itinerary.append({
                     "day": day,
                     "date": formatted_date,
                     "schedule_type": "농가",
-                    "name": selected_farm.get("farm", ""),
+                    "name": farm_name,
                     "start_time": selected_farm.get("start_time", "08:00"),
-                    "address": selected_farm.get("address", "")
+                    "address": farm_address
                 })
             elif day in tour_schedule:
                 # 관광지 일정 (중복 방지)
@@ -886,13 +1164,32 @@ class SimpleSchedulingService:
                     tour = tour_info["tour"]
                     start_time = tour_info["time"]
                     
+                    # 관광지 데이터의 중첩 구조 처리
+                    tour_data = tour.get("raw") or tour
+                    
+                    # 관광지 이름과 주소 추출 (여러 필드명 지원)
+                    tour_name = (tour_data.get("name") or 
+                               tour_data.get("tour_name") or 
+                               tour_data.get("title") or
+                               tour.get("title", ""))  # 최상위 레벨도 확인
+                               
+                    tour_address = (tour_data.get("address") or 
+                                  tour_data.get("address_full") or
+                                  tour.get("location", ""))  # 최상위 레벨도 확인
+                    
+                    if not tour_name:  # 이름이 여전히 없으면 더 자세히 확인
+                        print(f"⚠️ 관광지 이름 없음: {tour}")
+                        tour_name = "관광지명 미정"
+                    
+                    print(f"🏞️ 관광지 일정 생성: {tour_name} at {tour_address}")
+                    
                     itinerary.append({
                         "day": day,
                         "date": formatted_date,
                         "schedule_type": "관광지",
-                        "name": tour.get("name", tour.get("tour_name", "관광지")),
+                        "name": tour_name,
                         "start_time": start_time,
-                        "address": tour.get("address", "")
+                        "address": tour_address
                     })
         
         schedule_text = self._format_itinerary_as_text(itinerary)

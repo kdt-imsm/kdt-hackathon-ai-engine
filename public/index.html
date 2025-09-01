@@ -501,6 +501,23 @@
             </div>
             <button class="btn btn-warning" onclick="submitFeedback()" id="feedbackBtn">피드백 제출</button>
           </div>
+
+          <!-- AI 여행 요약 섹션 -->
+          <div class="mt-4">
+            <h4><i class="fas fa-magic text-success me-2"></i>AI 여행 요약</h4>
+            <p class="text-muted">일정이 마음에 드시면 AI가 생성한 매력적인 여행 요약을 받아보세요!</p>
+            <button class="btn btn-success" onclick="generateTravelSummary()" id="summaryBtn">✨ AI 여행 요약 생성</button>
+            
+            <!-- AI 여행 요약 결과 -->
+            <div id="travelSummaryResult" class="mt-3" style="display: none;">
+              <div class="alert alert-success">
+                <h5><i class="fas fa-sparkles me-2"></i>AI 여행 에디터의 추천</h5>
+                <div id="travelSummaryContent" class="mt-3">
+                  <!-- AI 생성 요약이 여기에 표시됩니다 -->
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1007,6 +1024,59 @@
               <h5>수정된 일정:</h5>
               <div style="white-space: pre-wrap; line-height: 1.6;">${itineraryContent}</div>
             </div>
+          </div>
+        `;
+      }
+
+      // AI 여행 요약 생성
+      async function generateTravelSummary() {
+        if (!currentItineraryId) {
+          alert('생성된 일정이 없습니다. 먼저 일정을 생성해주세요.');
+          return;
+        }
+
+        const summaryBtn = document.getElementById('summaryBtn');
+        const originalText = summaryBtn.textContent;
+        
+        try {
+          summaryBtn.textContent = '🎨 AI 여행 요약 생성 중...';
+          summaryBtn.disabled = true;
+
+          const response = await fetch(`/api/schedule/${currentItineraryId}/summary`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+
+          const result = await response.json();
+
+          if (result.status === 'success') {
+            displayTravelSummary(result.data);
+            document.getElementById('travelSummaryResult').style.display = 'block';
+          } else {
+            alert('오류: ' + (result.message || 'AI 여행 요약 생성 실패'));
+          }
+        } catch (error) {
+          alert('네트워크 오류: ' + error.message);
+        } finally {
+          summaryBtn.textContent = originalText;
+          summaryBtn.disabled = false;
+        }
+      }
+
+      // AI 여행 요약 결과 표시
+      function displayTravelSummary(data) {
+        const summaryContent = data.travel_summary || '여행 요약을 생성할 수 없습니다.';
+        
+        document.getElementById('travelSummaryContent').innerHTML = `
+          <div class="p-3" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; border-left: 5px solid #28a745;">
+            <div style="white-space: pre-wrap; line-height: 1.8; font-size: 1.1rem; color: #495057;">
+              ${summaryContent}
+            </div>
+          </div>
+          <div class="text-muted mt-2 text-center">
+            <small><i class="fas fa-robot me-1"></i>GPT-4o AI 여행 에디터가 생성한 개인화된 여행 요약입니다</small>
           </div>
         `;
       }

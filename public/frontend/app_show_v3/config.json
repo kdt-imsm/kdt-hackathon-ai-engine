@@ -1,0 +1,23 @@
+{
+  "baseURL": "http://localhost:8000",
+  "timeout_ms": 20000,
+  "endpoints": {
+    "health": "/healthz",
+    "root": "/",
+
+    "onboarding": "/api/onboarding",
+
+    "recommendations": "/recommendations/with-user",
+
+    "plan": "/api/schedule/with-user",
+    "revise": "/api/schedule/feedback",
+    "schedule_feedback_by_id": "/api/schedule/{itinerary_id}/feedback",
+    "get_schedule_by_id": "/api/schedule/{itinerary_id}",
+
+    "user": "/api/user/{user_id}",
+    "user_schedules": "/api/user/{user_id}/schedules",
+
+    "preferences": "/api/preferences/options",
+    "regions": "/api/regions"
+  }
+}

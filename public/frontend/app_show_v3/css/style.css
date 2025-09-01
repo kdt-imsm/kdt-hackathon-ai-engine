@@ -1,0 +1,392 @@
+
+:root{
+    --primary:#36A756;                 /* ✅ 대표색 */
+    --accent:#F7C948;
+    --bg:#F7F9F7;
+    --ink:#222;
+    --muted:#667085;
+    --card:#fff;
+    --radius:18px;
+  }  
+*{box-sizing:border-box} html,body{margin:0;padding:0;height:100%;background:#e8eee8}
+body{font-family:system-ui,-apple-system,Roboto,'Apple SD Gothic Neo','Noto Sans KR',Segoe UI,Arial,sans-serif;color:var(--ink)}
+.app{max-width:420px;margin:0 auto;min-height:100vh;background:white;box-shadow:0 0 40px rgba(0,0,0,.05);position:relative}
+.header{position:sticky;top:0;z-index:50;background:var(--card);display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #eef0ee}
+.logo{display:flex;align-items:center;gap:8px;font-weight:900}
+.hamburger{margin-left:auto;border:none;background:transparent;min-width:40px;min-height:40px;border-radius:10px}
+.hamburger:active{background:#eef6ee}
+.container{padding:12px 16px 24px 16px}
+.card{background:var(--card);border:1px solid #edf2ed;border-radius:var(--radius);padding:5px;box-shadow:0 6px 18px rgba(0,0,0,.04)}
+.btn{background:var(--primary);color:#fff;border:none;border-radius:12px;padding:14px 18px;font-weight:800;display:inline-flex;gap:8px;align-items:center;justify-content:center}
+.btn.secondary{background:var(--accent);color:#111}
+.btn.ghost{background:#f4f7f4;color:#111}
+.grid{display:grid;gap:10px}.grid-2{grid-template-columns:1fr 1fr}
+.input,select,textarea{width:100%;padding:14px;border-radius:12px;border:1px solid #e5e7eb;background:white}
+.badges{display:flex;flex-wrap:wrap;gap:10px}.badge{border:1.5px solid var(--primary);border-radius:999px;padding:10px 16px;font-weight:700;background:#f4fbf1}
+.section-title{font-size:18px;font-weight:900;margin:8px 0}
+.muted{color:var(--muted);font-size:13px}
+.steps-indicator{position:sticky;top:56px;z-index:10;text-align:right;font-weight:800;padding:8px 16px;color:#9aa0a6}
+
+/* Drawer (sidebar) */
+.drawer{position:fixed;left:0;top:0;width:100%;height:100vh;z-index:60;display:none}
+.drawer.open{display:block}
+.drawer .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.drawer .panel{position:absolute;left:0;top:0;height:100%;width:84%;max-width:360px;background:#fff;border-right:1px solid #eaeaea;padding:18px 14px;overflow:auto}
+.history-item{padding:12px;border-bottom:1px solid #f0f0f0}
+.brand{display:flex;align-items:center;gap:8px;font-weight:900;font-size:20px}
+.pill{background:var(--primary);color:#fff;padding:4px 8px;border-radius:8px}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:10px}
+.tab{padding:10px 14px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;font-weight:800}
+.tab.active{background:#e9f8e3;border-color:#76d062;color:#114b14}
+
+/* Calendar */
+.calendar{background:#fff;border:2px solid #3e9a2d22;border-radius:16px;padding:12px}
+.cal-head{display:flex;align-items:center;justify-content:space-between;padding:8px 6px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px}
+.cal-cell{height:44px;border-radius:10px;background:#f6faf6;display:flex;align-items:center;justify-content:center;font-weight:700;color:#475569;position:relative}
+.cal-cell.muted{background:#f9faf9;color:#c1c6c6}
+.cal-cell.has{background:#e9f8e3;border:1.5px solid #7dd56f;color:#134e13}
+.cal-cell .dot{position:absolute;bottom:6px;width:6px;height:6px;border-radius:5px;background:var(--primary)}
+
+.timetable{border-left:4px solid var(--primary);padding-left:14px}
+.timetable .item{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed #e5e7eb}
+.timetable .bullet{width:12px;height:12px;border-radius:50%;background:var(--primary);margin-top:6px}
+
+/* Chat */
+.chat{display:flex;flex-direction:column;gap:12px}
+.msg{max-width:80%;padding:12px 14px;border-radius:14px;background:#f1f5f1}
+.msg.me{align-self:flex-end;background:#def7d9}
+.msg.bot{align-self:flex-start}
+.inputbar{position:sticky;bottom:0;background:white;padding:10px;border-top:1px solid #eef0ee;display:flex;gap:8px}
+
+/* Cards Carousel */
+.carousel{display:flex;gap:12px;overflow:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
+.cardItem{min-width:260px;scroll-snap-align:start;background:#fff;border:1px solid #e8ece8;border-radius:16px;box-shadow:0 4px 14px rgba(0,0,0,.05);overflow:hidden}
+.cardImg{height:140px;background:#eaeaea;background-size:cover;background-position:center}
+.cardBody{padding:12px}
+.cardTitle{font-weight:900}
+.cardLoc{font-size:12px;color:#6b7280}
+.cardFoot{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.cardItem.active{
+  outline: 2px solid var(--primary);
+  box-shadow: 0 0 0 2px #0000, 0 0 0 4px rgba(54,167,86,.15);
+}
+.kit{font-size:12px;background:#f6f6f6;border-radius:8px;padding:6px 8px}
+
+/* 체크박스 스타일 */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: relative;
+  height: 18px;
+  width: 18px;
+  background-color: #f6f6f6;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.checkbox-container:hover input ~ .checkmark {
+  background-color: #e8f5e8;
+  border-color: var(--primary);
+}
+
+.checkbox-container input:checked ~ .checkmark {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+/* 로딩 스피너 */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 스케줄 테이블 */
+.schedule-table {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.schedule-item {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #f8faf8;
+  border-left: 4px solid var(--primary);
+  border-radius: 12px;
+}
+
+.schedule-day {
+  min-width: 60px;
+  font-weight: 900;
+  color: var(--primary);
+  font-size: 14px;
+}
+
+.schedule-content {
+  flex: 1;
+}
+
+.schedule-date-with-type {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.schedule-date {
+  font-weight: 800;
+}
+
+.schedule-place {
+  margin-bottom: 16px; /* 일정이 여러 개일 때 아래 일정과의 간격 */
+}
+
+.schedule-place:last-child {
+  margin-bottom: 0; /* 마지막 일정은 하단 여백 제거 */
+}
+
+.schedule-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px; /* 8px에서 4px로 간격 줄임 */
+}
+
+.schedule-details {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.schedule-type {
+  background: var(--primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.schedule-type.tour {
+  background: white;
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+.schedule-time {
+  font-weight: 600;
+  background: white;
+  border: 1px solid #e5e7eb;
+  padding: 3px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.schedule-address {
+  color: #888;
+}
+
+.notice{background:#fff6d0;border:1px solid #ffe28c;padding:12px;border-radius:12px}
+.footer-space{height:30px}
+small.key{font-family:monospace;color:#888}
+
+/* 입력/셀렉트 기본 크기 업 (iOS 확대 방지용 폰트 16px 이상) */
+.input,
+select {
+  height: 52px;
+  font-size: 16px;        /* iOS 자동 줌 방지 */
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+/* 셀렉트 화살표 크고 여유 있게 */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 38px;     /* 화살표 자리 */
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  /* 필요하면 아래 SVG 화살표 사용
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 9l6 6 6-6' fill='none' stroke='%23555' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  */
+}
+
+/* 칩 터치 영역 키우기 */
+.badges .badge {
+  padding: 10px 14px;
+  font-size: 15px;
+}
+
+/* ✅ 칩 선택(토글) 시 스타일 */
+.badges .badge.active {
+  background-color: #6DBE45;   /* 초록색 */
+  border-color: #6DBE45;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+/* ===== 타이포/레이블 ===== */
+.h1{
+    font-size: 20px;
+    font-weight: 900;
+    line-height: 1.35;
+    margin: 4px 0 14px;
+  }
+  .form-label{
+    font-size: 14px;       /* 2,3) 거주지/성별 소제목 조금 작게 */
+    font-weight: 800;      /* 볼드 */
+    color: #1f2937;
+    margin: 12px 0 6px;
+  }
+  
+  /* 2) placeholder 글꼴 크기 줄이기 */
+  .input::placeholder,
+  textarea::placeholder{
+    font-size: 14px;
+    color: #9aa6b2;
+  }
+  
+  /* 3) 성별 라디오 한 줄 정렬 */
+  .radio-row{
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 30px;
+  }
+  .radio-row label{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:14px;
+  }
+  
+  /* ===== 여백 유틸 ===== */
+  .mb-8{  margin-bottom: 8px; }
+  .mb-12{ margin-bottom: 12px; }
+  .mt-12{ margin-top: 12px; }
+  
+  /* (유지) 입력/셀렉트 크기 업 */
+  .input,
+  select{
+    height: 52px;
+    font-size: 16px;      /* iOS 확대 방지 */
+    padding: 14px 16px;
+    border-radius: 12px;
+  }
+  
+  /* (유지) 셀렉트 화살표 공간/가독성 */
+  select{
+    -webkit-appearance:none;
+    appearance:none;
+    padding-right:38px;
+    background-repeat:no-repeat;
+    background-position:right 12px center;
+    background-size:16px;
+  }
+  
+/* ========== 온보딩 공통 ========== */
+
+/* 카드 상단 중앙 아이콘 */
+.step-hero{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    margin: 8px 0 12px;
+  }
+  .step-hero img{
+    width: 80px;           /* 필요하면 80~120px로 조절 */
+    height: 80px;
+    object-fit: contain;
+    display: block;
+  }
+  
+  /* 보조설명 */
+  .sub{ font-size:13px; color:#6b7280; margin-top:2px; }
+  
+  /* 세로 리스트(왼쪽 칩 + 오른쪽 설명) */
+  .list-rows{ margin: 10px 0 16px; }
+  .list-rows .row{
+    display:flex; align-items:center; gap:12px;
+    padding:12px 0;
+    border-bottom:1px dashed #eef2ee;
+  }
+  .list-rows .row:last-child{ border-bottom:none; }
+  .list-rows .row .badge{
+    min-width:86px; justify-content:center;
+    padding:10px 16px; font-weight:800;
+  }
+  .list-rows .row .desc{ font-size:13px; color:#374151; }
+  
+  /* ✅ 선택 토글(모든 화면에서 일관 적용) */
+  .badge.active{                     /* .badges, .list-rows 어디서든 적용 */
+    background:#6DBE45;
+    border-color:#6DBE45;
+    color:#fff;
+    transition:all .2s ease;
+  }
+  
+  /* ✅ CTA 버튼 더 크고 길게 (카드 가로 꽉) */
+  .btn.btn-lg{
+    width: 100%;
+    height: 50px;
+    font-size: 17px;
+    border-radius: 14px;
+    margin-top: 15px;   /* 버튼 상단 여백 */
+  }
+  
+  /* 작은 화면 미세 조정 */
+  @media (max-width: 380px){
+    .step-hero img{ width:88px; height:88px; }
+    .list-rows .row{ padding:10px 0; gap:10px; }
+    .list-rows .row .badge{ min-width:78px; padding:8px 14px; }
+  }
+  

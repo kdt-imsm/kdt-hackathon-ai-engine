@@ -11,6 +11,11 @@ from typing import List, Dict, Any, Optional
 from app.utils.jeonbuk_region_mapping import extract_region_from_natural_text
 from app.services.detail_loader import fetch_detail_image
 from app.embeddings.openai_service import OpenAIService
+from app.utils.attraction_scoring import (
+    score_and_rank_attractions,
+    get_top_attractions_for_cards,
+    get_attractions_for_schedule
+)
 
 class SimpleRecommendationService:
     def __init__(self):
@@ -184,6 +189,70 @@ class SimpleRecommendationService:
         
         return keywords
 
+    def _get_scored_attractions(self, attractions: List[Dict], user_travel_styles: List[str], 
+                               user_landscapes: Optional[List[str]] = None) -> List[Dict]:
+        """
+        사용자 선호도 기반 관광지 스코어링 및 순위 정렬
+        상위 20개까지 추출하여 이미지 확인 후 반환
+        """
+        # 스코어링 및 순위 정렬
+        scored_attractions = score_and_rank_attractions(
+            attractions, user_travel_styles, user_landscapes
+        )
+        
+        # 김제지평선축제 특별 처리 (항상 최우선)
+        gimje_festival = None
+        other_attractions = []
+        
+        for scored_attr in scored_attractions:
+            if '김제지평선축제' in scored_attr.name:
+                gimje_festival = scored_attr
+            else:
+                other_attractions.append(scored_attr)
+        
+        # 김제지평선축제를 맨 앞으로, 나머지는 스코어 순서 유지
+        if gimje_festival:
+            final_scored = [gimje_festival] + other_attractions[:19]  # 총 20개
+        else:
+            final_scored = other_attractions[:20]
+        
+        # 상위 20개 추출 (이미지 확인용)
+        top_20 = final_scored
+        
+        # 이미지가 있는 관광지만 필터링
+        filtered_attractions = []
+        print(f"🖼️ 이미지 필터링 시작: {len(top_20)}개 관광지 확인")
+        
+        for i, scored_attr in enumerate(top_20):
+            contentid = scored_attr.contentid
+            print(f"   {i+1}. {scored_attr.name} (ID: {contentid}) - 이미지 확인중...")
+            
+            if contentid:
+                image_url = fetch_detail_image(contentid)
+                if image_url:
+                    print(f"      ✅ 이미지 있음")
+                    # AttractionScore를 Dict로 변환하고 이미지 URL 추가
+                    attr_dict = {
+                        'name': scored_attr.name,
+                        'region': scored_attr.region,
+                        'address_full': scored_attr.address_full,
+                        'lat': scored_attr.lat,
+                        'lon': scored_attr.lon,
+                        'contentid': scored_attr.contentid,
+                        'landscape_keywords': scored_attr.landscape_keywords,
+                        'travel_style_keywords': scored_attr.travel_style_keywords,
+                        'image_url': image_url,
+                        '_score': scored_attr.score  # 디버깅용
+                    }
+                    filtered_attractions.append(attr_dict)
+                else:
+                    print(f"      ❌ 이미지 없음")
+            else:
+                print(f"      ❌ ContentID 없음")
+        
+        print(f"🖼️ 이미지 필터링 완료: {len(filtered_attractions)}개 관광지")
+        return filtered_attractions
+
     def _match_attractions_by_preference(self, attractions: List[Dict], 
                                        travel_keywords: List[str], 
                                        landscape_keywords: List[str],
@@ -247,7 +316,25 @@ class SimpleRecommendationService:
         extracted_intent = self.openai_service.extract_intent_from_natural_text(natural_request)
         
         # 2. LLM 결과와 기존 선호도 통합
-        enhanced_keywords = self.openai_service.enhance_keywords_with_context(extracted_intent, preferences)
+        try:
+            enhanced_keywords = self.openai_service.enhance_keywords_with_context(extracted_intent, preferences)
+            if not enhanced_keywords:
+                enhanced_keywords = {
+                    'travel_style_keywords': preferences.get('travel_style_keywords', []),
+                    'landscape_keywords': preferences.get('landscape_keywords', []),
+                    'job_type_keywords': preferences.get('job_type_keywords', []),
+                    'activity_keywords': [],
+                    'seasonal_keywords': []
+                }
+        except Exception as e:
+            print(f"❌ enhance_keywords_with_context 오류: {e}")
+            enhanced_keywords = {
+                'travel_style_keywords': preferences.get('travel_style_keywords', []),
+                'landscape_keywords': preferences.get('landscape_keywords', []),
+                'job_type_keywords': preferences.get('job_type_keywords', []),
+                'activity_keywords': [],
+                'seasonal_keywords': []
+            }
         
         # 3. 지역 결정 (LLM 결과 우선, 폴백으로 기존 로직)
         target_region = extracted_intent.get("지역")
@@ -270,6 +357,8 @@ class SimpleRecommendationService:
         print(f"🎯 결정된 대상 지역: {target_region}")
         print(f"🔍 LLM 추출 의도: {extracted_intent}")
         print(f"🚀 향상된 키워드: {enhanced_keywords}")
+        print(f"👤 사용자 원본 선호도: {preferences}")
+        print(f"🚀 향상된 키워드 타입: {type(enhanced_keywords)}")
         
         # 4. 농가 추천 (LLM 향상 키워드 활용)
         all_farms = self._load_farms_data()
@@ -282,23 +371,39 @@ class SimpleRecommendationService:
         
         recommended_farms = self._match_farms_by_job_keywords(regional_farms, combined_job_keywords)
         
-        # 5. 관광지 추천 (LLM 향상 키워드 활용)
+        # 5. 관광지 추천 (새로운 스코어링 시스템 활용)
         regional_attractions = self._load_regional_attractions(target_region)
-        attractions_with_images = self._filter_attractions_with_images(regional_attractions)
         
-        # LLM 향상 키워드 활용
-        combined_travel_keywords = enhanced_keywords.get('travel_style_keywords', [])
-        combined_landscape_keywords = enhanced_keywords.get('landscape_keywords', [])
-        combined_activity_keywords = enhanced_keywords.get('activity_keywords', [])
-        combined_seasonal_keywords = enhanced_keywords.get('seasonal_keywords', [])
+        # 사용자 선호도에서 landscape와 travel_style 추출
+        user_travel_styles = preferences.get('travel_style_keywords', [])
+        user_landscapes = preferences.get('landscape_keywords', [])  # 복수 landscape 그대로 사용
         
-        # 모든 LLM 추출 키워드 통합
-        all_enhanced_keywords = combined_travel_keywords + combined_landscape_keywords + \
-                              combined_activity_keywords + combined_seasonal_keywords
+        # LLM 향상 키워드와 통합
+        enhanced_travel_styles = enhanced_keywords.get('travel_style_keywords', [])
+        final_travel_styles = list(set(user_travel_styles + enhanced_travel_styles))
         
-        recommended_attractions = self._match_attractions_by_preference(
-            attractions_with_images, combined_travel_keywords, combined_landscape_keywords, 
-            natural_request, all_enhanced_keywords)
+        print(f"🎨 관광지 스코어링 입력:")
+        print(f"   - 여행 스타일: {final_travel_styles}")
+        print(f"   - 풍경 선호: {user_landscapes}")
+        print(f"   - 총 관광지 개수: {len(regional_attractions)}")
+        
+        # 새로운 스코어링 시스템 적용
+        scored_attractions = self._get_scored_attractions(
+            regional_attractions, final_travel_styles, user_landscapes
+        )
+        
+        print(f"✅ 스코어링 완료: {len(scored_attractions)}개 관광지 (이미지 있음)")
+        
+        # 상위 5개의 스코어 출력
+        if scored_attractions:
+            print(f"🏆 상위 관광지 스코어:")
+            for i, attr in enumerate(scored_attractions[:5]):
+                print(f"   {i+1}. {attr['name']}: {attr.get('_score', 'N/A')}점 "
+                      f"(travel_style: {attr.get('travel_style_keywords', 'None')}, "
+                      f"landscape: {attr.get('landscape_keywords', 'None')})")
+        
+        # 상위 5개를 카드용으로 선택
+        recommended_attractions = scored_attractions[:5]
         
         # 4. 프론트엔드 형식으로 변환 (요구사항에 맞는 필드명)
         farm_cards = []
@@ -364,7 +469,9 @@ class SimpleRecommendationService:
                     "activity_types": extracted_intent.get("활동_유형", []),
                     "region_name": target_region,
                     "recommendations_ready": len(farm_cards) > 0 and len(tour_cards) > 0
-                }
+                },
+                # 일정 생성용 스코어링된 관광지 전체 목록 (상위 20개)
+                "scored_attractions": scored_attractions
             }
         }
 
