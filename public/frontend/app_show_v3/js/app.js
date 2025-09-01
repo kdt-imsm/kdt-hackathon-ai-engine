@@ -313,11 +313,25 @@ function calendarBlocksHTML(year, month) {
         .join("")}
       ${days
         .map((d) => {
-          const has = !!cal[d.key];
-          return `<div class="cal-cell ${d.inMonth ? "" : "muted"} ${
-            has ? "has" : ""
-          }" data-date="${d.key}">
-          <div>${d.d}</div>${has ? '<div class="dot"></div>' : ""}</div>`;
+          const dayEvents = cal[d.key] || [];
+          const hasFarm = dayEvents.some(event => event.type === '농가');
+          const hasTour = dayEvents.some(event => event.type === '관광지');
+          const hasSchedule = dayEvents.length > 0;
+          
+          let scheduleClasses = '';
+          if (hasSchedule) {
+            scheduleClasses = 'has'; // 기본 배경색 유지
+            if (hasFarm && hasTour) {
+              scheduleClasses += ' has-mixed';
+            } else if (hasFarm) {
+              scheduleClasses += ' has-farm';
+            } else if (hasTour) {
+              scheduleClasses += ' has-tour';
+            }
+          }
+          
+          return `<div class="cal-cell ${d.inMonth ? "" : "muted"} ${scheduleClasses}" data-date="${d.key}">
+          <div>${d.d}</div>${hasSchedule ? '<div class="dot"></div>' : ""}</div>`;
         })
         .join("")}
     </div>`;
@@ -519,7 +533,7 @@ function renderMiniTime() {
             <div class="schedule-content">
               <div class="schedule-date-with-type">
                 <span class="schedule-date">${firstItem.date}</span>
-                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type}</span>
+                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type === '관광지' ? '관광' : firstItem.schedule_type}</span>
               </div>
               
               ${group.type === "농가" ? 
@@ -616,18 +630,20 @@ function renderHome() {
     localStorage.setItem("ims_month", mm);
     renderHome();
   };
-  $$(".cal-cell.inMonth").forEach((cell) => {
+  $$(".cal-cell.has").forEach((cell) => {
     cell.onclick = () => {
       const date = cell.dataset.date;
       const yymm = date.slice(0, 7);
       const items = (STATE.calendar[yymm] || {})[date] || [];
-      alert(
-        items.length
-          ? items
-              .map((i) => `${i.datetime.slice(11, 16)} ${i.title}`)
-              .join("\\n")
-          : "이 날짜에는 일정이 없습니다."
-      );
+      if (items.length) {
+        const scheduleList = items.map((item) => {
+          const timeInfo = item.date.includes(' ') ? ` ${item.date.split(' ').pop()}` : '';
+          return `• ${item.activity}${timeInfo}`;
+        }).join('\\n');
+        alert(`📅 ${date.slice(5).replace('-', '월 ')}일 일정:\\n\\n${scheduleList}`);
+      } else {
+        alert("이 날짜에는 일정이 없습니다.");
+      }
     };
   });
 }
@@ -820,7 +836,7 @@ function renderCardsSection(title, list, key) {
         <div class="cardLoc">${x.location || ""}</div>
         <div class="cardFoot">
           <span class="kit">${
-            x.kind === "jobs" || x.kind === "farm" ? "농가" : "관광지"
+            x.kind === "jobs" || x.kind === "farm" ? "농가" : "관광"
           }</span>
           <label class="checkbox-container">
             <input type="checkbox" class="card-checkbox" data-id="${
@@ -988,7 +1004,7 @@ function renderScheduleTable(sched) {
             <div class="schedule-content">
               <div class="schedule-date-with-type">
                 <span class="schedule-date">${firstItem.date}</span>
-                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type}</span>
+                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type === '관광지' ? '관광' : firstItem.schedule_type}</span>
               </div>
               
               ${group.type === "농가" ? 
@@ -1112,30 +1128,42 @@ function renderMiniCalendar(events, container, title = "캘린더") {
 function updateHomeCalendar() {
   if (!STATE.last_schedule?.itinerary) return;
   
+  console.log('일정 확정 - 캘린더 업데이트 시작', STATE.last_schedule.itinerary);
+  
   // 일정을 캘린더 이벤트로 변환
   STATE.last_schedule.itinerary.forEach(item => {
     if (item.date && item.name) {
-      // 날짜를 YYYY-MM-DD 형태로 변환
-      const dateStr = item.date;
-      const yearMonth = dateStr.slice(0, 7); // YYYY-MM
-      const day = dateStr.slice(8, 10); // DD
+      // 날짜 형식: "09월 05일 (금)" -> YYYY-MM-DD로 변환
+      const dateMatch = item.date.match(/(\d{2})월 (\d{2})일/);
+      if (!dateMatch) return;
+      
+      const currentYear = new Date().getFullYear();
+      const month = dateMatch[1].padStart(2, '0');
+      const day = dateMatch[2].padStart(2, '0');
+      const fullDate = `${currentYear}-${month}-${day}`;
+      const yearMonth = `${currentYear}-${month}`;
+      
+      console.log(`일정 추가: ${item.date} -> ${fullDate}, 활동: ${item.name}`);
       
       // 캘린더 데이터 구조에 맞게 저장
       STATE.calendar[yearMonth] = STATE.calendar[yearMonth] || {};
-      STATE.calendar[yearMonth][day] = STATE.calendar[yearMonth][day] || [];
+      STATE.calendar[yearMonth][fullDate] = STATE.calendar[yearMonth][fullDate] || [];
       
       // 중복 방지
-      const exists = STATE.calendar[yearMonth][day].some(event => 
+      const exists = STATE.calendar[yearMonth][fullDate].some(event => 
         event.activity === item.name && event.type === item.schedule_type
       );
       
       if (!exists) {
-        STATE.calendar[yearMonth][day].push({
+        STATE.calendar[yearMonth][fullDate].push({
           activity: item.name,
           date: item.date + (item.start_time ? ` ${item.start_time}` : ''),
           type: item.schedule_type,
           day: item.day
         });
+        console.log(`캘린더에 추가됨: ${fullDate} - ${item.name}`);
+      } else {
+        console.log(`이미 존재함: ${fullDate} - ${item.name}`);
       }
     }
   });

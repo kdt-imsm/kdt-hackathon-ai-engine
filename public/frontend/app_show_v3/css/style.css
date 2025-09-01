@@ -50,6 +50,18 @@ body{font-family:system-ui,-apple-system,Roboto,'Apple SD Gothic Neo','Noto Sans
 .cal-cell.has{background:#e9f8e3;border:1.5px solid #7dd56f;color:#134e13}
 .cal-cell .dot{position:absolute;bottom:6px;width:6px;height:6px;border-radius:5px;background:var(--primary)}
 
+/* 농가 일정 (기존 녹색 유지) */
+.cal-cell.has.has-farm{background:#e9f8e3 !important;border:1.5px solid #7dd56f;color:#134e13}
+.cal-cell.has.has-farm .dot{background:var(--primary)}
+
+/* 관광지 일정 (흰색 배경, 녹색 테두리) */
+.cal-cell.has.has-tour{background:#ffffff !important;border:1.5px solid #7dd56f;color:#374151}
+.cal-cell.has.has-tour .dot{background:var(--primary)}
+
+/* 혼합 일정 (농가 + 관광지 모두 있는 날) - 기존 농가 색상 유지 */
+.cal-cell.has.has-mixed{background:#e9f8e3 !important;border:1.5px solid #7dd56f;color:#134e13}
+.cal-cell.has.has-mixed .dot{background:var(--primary)}
+
 .timetable{border-left:4px solid var(--primary);padding-left:14px}
 .timetable .item{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed #e5e7eb}
 .timetable .bullet{width:12px;height:12px;border-radius:50%;background:var(--primary);margin-top:6px}

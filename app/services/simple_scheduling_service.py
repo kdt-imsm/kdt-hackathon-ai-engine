@@ -847,9 +847,10 @@ class SimpleSchedulingService:
             address = item.get('address', '주소 미정')
             
             emoji = "🚜" if schedule_type == "농가" else "🏞️"
+            display_type = "농가" if schedule_type == "농가" else "관광"
             
             formatted_lines.append(f"【{day}일차 - {date}】")
-            formatted_lines.append(f"{emoji} {schedule_type}: {name}")
+            formatted_lines.append(f"{emoji} {display_type}: {name}")
             formatted_lines.append(f"⏰ 시간: {start_time}")
             formatted_lines.append(f"📍 주소: {address}")
             formatted_lines.append("")  # 빈 줄
