@@ -103,14 +103,14 @@ async function callEngine(pathOrKey, body) {
     const t = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status} ${url} :: ${t}`);
   }
-  
+
   // 응답이 비어있거나 JSON이 아닐 경우 처리
   const responseText = await res.text();
   if (!responseText.trim()) {
     console.warn(`Empty response from ${url}`);
     return {};
   }
-  
+
   try {
     return JSON.parse(responseText);
   } catch (e) {
@@ -263,17 +263,39 @@ function renderHistoryList() {
 /* --------- Header --------- */
 function renderHeader() {
   const el = $(".header");
-  el.innerHTML = `
-    <div class="logo" style="display:flex;align-items:center;gap:8px">
-      <img src="./assets/icons/imsm_logo_w.png"
-           style="height:28px;object-fit:contain;display:block" />
-    </div>
-    <button class="hamburger" id="openDrawer">☰</button>
-  `;
+  const isChat = STATE.view === "chat";
+
+  if (isChat) {
+    // 챗봇 화면용 헤더
+    el.innerHTML = `
+      <button class="hamburger" id="openDrawer">☰</button>
+      <div class="header-title">전북에서 일·여행 계획 하기</div>
+      <button id="homeButton" style="background:none;border:none;padding:0">
+        <img src="./assets/icons/leaf.png" alt="home" class="header-leaf" />
+      </button>
+    `;
+  } else {
+    // 홈 화면용 헤더 (이미지 기준: 왼쪽 햄버거, 중앙 로고)
+    el.innerHTML = `
+      <button class="hamburger" id="openDrawer">☰</button>
+      <div class="logo" style="display:flex;align-items:center;gap:8px;position:absolute;left:50%;transform:translateX(-50%)">
+        <img src="./assets/icons/imsm_logo_w.png"
+             style="height:28px;object-fit:contain;display:block" />
+      </div>
+    `;
+  }
+
   $("#openDrawer").onclick = () => {
     $(".drawer").classList.add("open");
     renderDrawer();
   };
+
+  // 홈 버튼 클릭 이벤트 (챗봇 화면에서만)
+  if ($("#homeButton")) {
+    $("#homeButton").onclick = () => {
+      navigate("home");
+    };
+  }
 }
 
 /* --------- Calendar Tools --------- */
@@ -294,7 +316,7 @@ function monthMatrix(year, month) {
   return days;
 }
 function calendarBlocksHTML(year, month) {
-  const days = monthMatrix(year, month);
+  const days = monthMatrix(year, month).slice(0, 35); // 마지막 줄 제거 (6줄 → 5줄)
   const mm = (month + 1).toString().padStart(2, "0");
   const yymm = year + "-" + mm;
   const cal = STATE.calendar[yymm] || {};
@@ -314,24 +336,28 @@ function calendarBlocksHTML(year, month) {
       ${days
         .map((d) => {
           const dayEvents = cal[d.key] || [];
-          const hasFarm = dayEvents.some(event => event.type === '농가');
-          const hasTour = dayEvents.some(event => event.type === '관광지');
+          const hasFarm = dayEvents.some((event) => event.type === "농가");
+          const hasTour = dayEvents.some((event) => event.type === "관광지");
           const hasSchedule = dayEvents.length > 0;
-          
-          let scheduleClasses = '';
+
+          let scheduleClasses = "";
           if (hasSchedule) {
-            scheduleClasses = 'has'; // 기본 배경색 유지
+            scheduleClasses = "has"; // 기본 배경색 유지
             if (hasFarm && hasTour) {
-              scheduleClasses += ' has-mixed';
+              scheduleClasses += " has-mixed";
             } else if (hasFarm) {
-              scheduleClasses += ' has-farm';
+              scheduleClasses += " has-farm";
             } else if (hasTour) {
-              scheduleClasses += ' has-tour';
+              scheduleClasses += " has-tour";
             }
           }
-          
-          return `<div class="cal-cell ${d.inMonth ? "" : "muted"} ${scheduleClasses}" data-date="${d.key}">
-          <div>${d.d}</div>${hasSchedule ? '<div class="dot"></div>' : ""}</div>`;
+
+          return `<div class="cal-cell ${
+            d.inMonth ? "" : "muted"
+          } ${scheduleClasses}" data-date="${d.key}">
+          <div>${d.d}</div>${
+            hasSchedule ? '<div class="dot"></div>' : ""
+          }</div>`;
         })
         .join("")}
     </div>`;
@@ -471,17 +497,20 @@ async function confirmSchedule() {
 
 /* --------- Home --------- */
 function renderMiniTime() {
-  if (!STATE.last_schedule?.itinerary || STATE.last_schedule.itinerary.length === 0)
-    return `<div class="muted">아직 생성된 여행 일정이 없습니다.</div>`;
-  
+  if (
+    !STATE.last_schedule?.itinerary ||
+    STATE.last_schedule.itinerary.length === 0
+  )
+    return `<div class="muted" style="text-align:center">아직 생성된 여행 일정이 없습니다.</div>`;
+
   // chat 화면의 '생성된 여행 일정'과 동일한 형태로 표시
   const itinerary = STATE.last_schedule.itinerary;
-  
+
   // 일정 그룹화 (농가는 연속으로, 관광지는 같은 날짜끼리)
   const groupedSchedule = [];
   let currentGroup = null;
 
-  itinerary.forEach(item => {
+  itinerary.forEach((item) => {
     if (item.schedule_type === "농가") {
       if (currentGroup && currentGroup.type === "농가") {
         // 기존 농가 그룹에 추가
@@ -494,12 +523,16 @@ function renderMiniTime() {
           type: "농가",
           startDay: item.day,
           endDay: item.day,
-          items: [item]
+          items: [item],
         };
       }
     } else {
       // 관광지는 같은 날짜끼리 그룹화
-      if (currentGroup && currentGroup.type === "관광지" && currentGroup.startDay === item.day) {
+      if (
+        currentGroup &&
+        currentGroup.type === "관광지" &&
+        currentGroup.startDay === item.day
+      ) {
         // 같은 날짜의 관광지 그룹에 추가
         currentGroup.items.push(item);
       } else {
@@ -509,7 +542,7 @@ function renderMiniTime() {
           type: "관광지",
           startDay: item.day,
           endDay: item.day,
-          items: [item]
+          items: [item],
         };
       }
     }
@@ -520,60 +553,85 @@ function renderMiniTime() {
 
   return `
     <div class="schedule-table">
-      ${groupedSchedule.map(group => {
-        const dayRange = group.startDay === group.endDay 
-          ? `Day ${group.startDay}` 
-          : `Day ${group.startDay} ~ ${group.endDay}`;
-        
-        const firstItem = group.items[0];
-        
-        return `
+      ${groupedSchedule
+        .map((group) => {
+          const dayRange =
+            group.startDay === group.endDay
+              ? `Day ${group.startDay}`
+              : `Day ${group.startDay} ~ ${group.endDay}`;
+
+          const firstItem = group.items[0];
+
+          return `
           <div class="schedule-item">
             <div class="schedule-day">${dayRange}</div>
             <div class="schedule-content">
               <div class="schedule-date-with-type">
                 <span class="schedule-date">${firstItem.date}</span>
-                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type === '관광지' ? '관광' : firstItem.schedule_type}</span>
+                <span class="schedule-type${
+                  firstItem.schedule_type === "관광지" ? " tour" : ""
+                }">${
+            firstItem.schedule_type === "관광지"
+              ? "관광"
+              : firstItem.schedule_type
+          }</span>
               </div>
               
-              ${group.type === "농가" ? 
-                // 농가는 중복 제거하여 한 번만 표시
-                (() => {
-                  const uniqueItems = [];
-                  const seen = new Set();
-                  group.items.forEach(item => {
-                    const key = `${item.name}-${item.address}`;
-                    if (!seen.has(key)) {
-                      seen.add(key);
-                      uniqueItems.push(item);
-                    }
-                  });
-                  return uniqueItems.map(item => `
+              ${
+                group.type === "농가"
+                  ? // 농가는 중복 제거하여 한 번만 표시
+                    (() => {
+                      const uniqueItems = [];
+                      const seen = new Set();
+                      group.items.forEach((item) => {
+                        const key = `${item.name}-${item.address}`;
+                        if (!seen.has(key)) {
+                          seen.add(key);
+                          uniqueItems.push(item);
+                        }
+                      });
+                      return uniqueItems
+                        .map(
+                          (item) => `
                     <div class="schedule-place">
                       <div class="schedule-name">${item.name}</div>
                       <div class="schedule-details">
-                        <span class="schedule-time">${item.start_time || ''}</span>
-                        <span class="schedule-address">${item.address || ''}</span>
+                        <span class="schedule-time">${
+                          item.start_time || ""
+                        }</span>
+                        <span class="schedule-address">${
+                          item.address || ""
+                        }</span>
                       </div>
                     </div>
-                  `).join('');
-                })()
-                :
-                // 관광지는 모든 항목 표시
-                group.items.map(item => `
+                  `
+                        )
+                        .join("");
+                    })()
+                  : // 관광지는 모든 항목 표시
+                    group.items
+                      .map(
+                        (item) => `
                   <div class="schedule-place">
                     <div class="schedule-name">${item.name}</div>
                     <div class="schedule-details">
-                      <span class="schedule-time">${item.start_time || ''}</span>
-                      <span class="schedule-address">${item.address || ''}</span>
+                      <span class="schedule-time">${
+                        item.start_time || ""
+                      }</span>
+                      <span class="schedule-address">${
+                        item.address || ""
+                      }</span>
                     </div>
                   </div>
-                `).join('')
+                `
+                      )
+                      .join("")
               }
             </div>
           </div>
         `;
-      }).join('')}
+        })
+        .join("")}
     </div>
   `;
 }
@@ -583,19 +641,23 @@ function renderHome() {
   const m = Number(localStorage.getItem("ims_month")) || now.getMonth();
   const c = $(".container");
   c.innerHTML = `
-    <div class="card">
-      </div>
-      <div class="calendar" id="calendar">${calendarBlocksHTML(y, m)}</div>
-      <div style="height:8px"></div>
-      <div class="section-title" style="text-align:center">나만의 맞춤형 AI 여행 플래너</div>
-      <div class="inputbar" style="position:static;border:none;padding:0;margin-top:8px">
-        <input class="input" id="homeQuery" placeholder="어떤 곳으로 떠나고 싶으신가요?">
-        <button class="btn" id="goChat">▶</button>
+      <div class="calendar" id="calendar" style="transform:scale(0.9);transform-origin:top center;margin-bottom:-20px">${calendarBlocksHTML(
+        y,
+        m
+      )}</div>
+      <div style="height:6px"></div>
+      <div class="section-title" style="text-align:center;font-weight:normal">나만의 맞춤형 AI 여행 플래너</div>
+      <div style="margin-top:16px;position:relative;width:100%;box-sizing:border-box;padding:0 8px 0 8px">
+        <input class="input" id="homeQuery" placeholder="언제 어디로 떠나고 싶으신가요?" 
+               style="border-radius:24px;padding-right:50px;border:1px solid #36A756;width:100%;box-sizing:border-box">
+        <button id="goChat" style="position:absolute;right:16px;top:50%;transform:translateY(-50%);background:none;border:none;padding:8px">
+          <img src="./assets/icons/kite.png" alt="send" style="width:24px;height:24px">
+        </button>
       </div>
     </div>
     <div style="height:12px"></div>
-    <div class="card">
-      <div class="tabs"><div class="tab active">여행요약</div><div class="tab">상세일정</div><div class="tab">일손매칭내역</div></div>
+    <div>
+      <div class="tabs" style="display:flex;justify-content:center"><div class="tab active">여행요약</div><div class="tab">상세일정</div><div class="tab">일손매칭내역</div></div>
       <div id="miniTime">${renderMiniTime()}</div>
     </div>`;
   $("#goChat").onclick = async () => {
@@ -636,11 +698,17 @@ function renderHome() {
       const yymm = date.slice(0, 7);
       const items = (STATE.calendar[yymm] || {})[date] || [];
       if (items.length) {
-        const scheduleList = items.map((item) => {
-          const timeInfo = item.date.includes(' ') ? ` ${item.date.split(' ').pop()}` : '';
-          return `• ${item.activity}${timeInfo}`;
-        }).join('\\n');
-        alert(`📅 ${date.slice(5).replace('-', '월 ')}일 일정:\\n\\n${scheduleList}`);
+        const scheduleList = items
+          .map((item) => {
+            const timeInfo = item.date.includes(" ")
+              ? ` ${item.date.split(" ").pop()}`
+              : "";
+            return `• ${item.activity}${timeInfo}`;
+          })
+          .join("\\n");
+        alert(
+          `📅 ${date.slice(5).replace("-", "월 ")}일 일정:\\n\\n${scheduleList}`
+        );
       } else {
         alert("이 날짜에는 일정이 없습니다.");
       }
@@ -653,10 +721,26 @@ function showLoading(message = "분석 중...") {
   const loading = document.createElement("div");
   loading.className = "msg bot loading";
   loading.id = "loadingMsg";
+
+  // 사용자 닉네임 처리
+  let processedMessage = message;
+  const userNick = STATE.profile?.nick || "사용자";
+  if (message.includes(userNick)) {
+    processedMessage = message.replace(
+      userNick,
+      `<span class="user-nickname">${userNick}</span>`
+    );
+  }
+
   loading.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 8px;">
-      <div class="spinner"></div>
-      <span>${message}</span>
+    <img src="./assets/icons/leaf.png" alt="leaf" class="leaf-icon" />
+    <div class="msg-content">
+      <span>${processedMessage}</span>
+      <div class="loading-dots">
+        <span></span>
+        <span class="active"></span>
+        <span></span>
+      </div>
     </div>
   `;
   $("#chat").appendChild(loading);
@@ -674,7 +758,8 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
     if (!skipUserMessage) {
       addMsg(natural_request, true);
     }
-    showLoading("조건을 분석 중입니다...");
+    const userNick = STATE.profile?.nick || "사용자";
+    showLoading(`${userNick}님 취향에 딱 맞는 맞춤형 선택지를 찾고 있어요!`);
 
     const reco = await engineRecommend(natural_request);
     console.log("[recommendations] raw:", reco);
@@ -683,7 +768,7 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
     const tours = reco?.data?.tour_spots || [];
 
     hideLoading();
-    
+
     if (!farms.length && !tours.length) {
       addMsg("조건에 맞는 추천이 없어요. 기간/지역을 조금 넓혀볼까요?");
       return;
@@ -729,7 +814,7 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
       const btn = $("#makePlan");
       btn.disabled = true;
       showLoading("일정을 생성하고 있습니다...");
-      
+
       const payload = {
         user_id: STATE.user_id || "local_user",
         natural_request: natural_request,
@@ -743,14 +828,14 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
         const sched = await createScheduleWithUser(payload);
         hideLoading();
         btn.remove(); // 버튼 삭제
-        
+
         STATE.chatStage = "table";
         saveState();
         renderScheduleTable(sched);
       } catch (e) {
         console.error("일정 생성 에러:", e);
         hideLoading();
-        
+
         if (e.message.includes("Invalid JSON")) {
           addMsg("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
         } else if (e.message.includes("HTTP")) {
@@ -758,7 +843,7 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
         } else {
           addMsg("일정 생성에 실패했어요. 다시 시도해 주세요.");
         }
-        
+
         btn.disabled = false;
       }
     };
@@ -911,10 +996,10 @@ function bindCardActions() {
         const pool = kind === "jobs" ? CURRENT_RECO.jobs : CURRENT_RECO.tours;
         const item = pool.find((x) => x.id === id);
         if (item && !STATE.chosenCards.some((c) => c.id === id)) {
-          STATE.chosenCards.push({ 
-            ...item, 
+          STATE.chosenCards.push({
+            ...item,
             kind: kind,
-            raw: item  // 원본 데이터 저장
+            raw: item, // 원본 데이터 저장
           });
         }
       } else {
@@ -932,7 +1017,28 @@ function bindCardActions() {
 function addMsg(text, me = false) {
   const div = document.createElement("div");
   div.className = "msg " + (me ? "me" : "bot");
-  div.textContent = text;
+
+  if (!me) {
+    // 봇 메시지인 경우 leaf 아이콘과 함께 구성
+    // 사용자 닉네임이 포함된 텍스트 처리
+    let processedText = text;
+    const userNick = STATE.profile?.nick || "사용자";
+    if (text.includes(userNick)) {
+      processedText = text.replace(
+        userNick,
+        `<span class="user-nickname">${userNick}</span>`
+      );
+    }
+
+    div.innerHTML = `
+      <img src="./assets/icons/leaf.png" alt="leaf" class="leaf-icon" />
+      <div class="msg-content">${processedText}</div>
+    `;
+  } else {
+    // 사용자 메시지는 기존대로
+    div.textContent = text;
+  }
+
   $("#chat").appendChild(div);
   $("#chat").scrollTop = $("#chat").scrollHeight;
 }
@@ -941,9 +1047,10 @@ function addMsg(text, me = false) {
 function renderScheduleTable(sched) {
   const container = $("#tableWrap");
   const itinerary = sched?.itinerary || [];
-  
+
   if (!itinerary.length) {
-    container.innerHTML = '<div class="muted">일정이 생성되지 않았습니다.</div>';
+    container.innerHTML =
+      '<div class="muted">일정이 생성되지 않았습니다.</div>';
     return;
   }
 
@@ -951,7 +1058,7 @@ function renderScheduleTable(sched) {
   const groupedSchedule = [];
   let currentGroup = null;
 
-  itinerary.forEach(item => {
+  itinerary.forEach((item) => {
     if (item.schedule_type === "농가") {
       if (currentGroup && currentGroup.type === "농가") {
         // 기존 농가 그룹에 추가
@@ -964,12 +1071,16 @@ function renderScheduleTable(sched) {
           type: "농가",
           startDay: item.day,
           endDay: item.day,
-          items: [item]
+          items: [item],
         };
       }
     } else {
       // 관광지는 같은 날짜끼리 그룹화
-      if (currentGroup && currentGroup.type === "관광지" && currentGroup.startDay === item.day) {
+      if (
+        currentGroup &&
+        currentGroup.type === "관광지" &&
+        currentGroup.startDay === item.day
+      ) {
         // 같은 날짜의 관광지 그룹에 추가
         currentGroup.items.push(item);
       } else {
@@ -979,7 +1090,7 @@ function renderScheduleTable(sched) {
           type: "관광지",
           startDay: item.day,
           endDay: item.day,
-          items: [item]
+          items: [item],
         };
       }
     }
@@ -989,64 +1100,96 @@ function renderScheduleTable(sched) {
   if (currentGroup) groupedSchedule.push(currentGroup);
 
   container.innerHTML = `
-    <div class="section-title">생성된 여행 일정</div>
+    <div class="section-title" style="text-align:left">생성된 여행 일정</div>
     <div class="schedule-table">
-      ${groupedSchedule.map(group => {
-        const dayRange = group.startDay === group.endDay 
-          ? `Day ${group.startDay}` 
-          : `Day ${group.startDay} ~ ${group.endDay}`;
-        
-        const firstItem = group.items[0];
-        
-        return `
+      ${groupedSchedule
+        .map((group) => {
+          const dayRange =
+            group.startDay === group.endDay
+              ? `Day ${group.startDay}`
+              : `Day ${group.startDay} ~ ${group.endDay}`;
+
+          const firstItem = group.items[0];
+
+          return `
           <div class="schedule-item">
             <div class="schedule-day">${dayRange}</div>
             <div class="schedule-content">
               <div class="schedule-date-with-type">
                 <span class="schedule-date">${firstItem.date}</span>
-                <span class="schedule-type${firstItem.schedule_type === '관광지' ? ' tour' : ''}">${firstItem.schedule_type === '관광지' ? '관광' : firstItem.schedule_type}</span>
+                <span class="schedule-type${
+                  firstItem.schedule_type === "관광지" ? " tour" : ""
+                }">${
+            firstItem.schedule_type === "관광지"
+              ? "관광"
+              : firstItem.schedule_type
+          }</span>
               </div>
               
-              ${group.type === "농가" ? 
-                // 농가는 중복 제거하여 한 번만 표시
-                (() => {
-                  const uniqueItems = [];
-                  const seen = new Set();
-                  group.items.forEach(item => {
-                    const key = `${item.name}-${item.address}`;
-                    if (!seen.has(key)) {
-                      seen.add(key);
-                      uniqueItems.push(item);
-                    }
-                  });
-                  return uniqueItems.map(item => `
+              ${
+                group.type === "농가"
+                  ? // 농가는 중복 제거하여 한 번만 표시
+                    (() => {
+                      const uniqueItems = [];
+                      const seen = new Set();
+                      group.items.forEach((item) => {
+                        const key = `${item.name}-${item.address}`;
+                        if (!seen.has(key)) {
+                          seen.add(key);
+                          uniqueItems.push(item);
+                        }
+                      });
+                      return uniqueItems
+                        .map(
+                          (item) => `
                     <div class="schedule-place">
                       <div class="schedule-name">${item.name}</div>
                       <div class="schedule-details">
-                        <span class="schedule-time-tag">${item.start_time || ''}</span>
-                        <span class="schedule-address">${item.address || ''}</span>
+                        <span class="schedule-time-tag">${
+                          item.start_time || ""
+                        }</span>
+                        <span class="schedule-address">${
+                          item.address || ""
+                        }</span>
                       </div>
                     </div>
-                  `).join('');
-                })()
-                :
-                // 관광지는 모든 항목 표시
-                group.items.map(item => `
+                  `
+                        )
+                        .join("");
+                    })()
+                  : // 관광지는 모든 항목 표시
+                    group.items
+                      .map(
+                        (item) => `
                   <div class="schedule-place">
                     <div class="schedule-name">${item.name}</div>
                     <div class="schedule-details">
-                      <span class="schedule-time-tag">${item.start_time || ''}</span>
-                      <span class="schedule-address">${item.address || ''}</span>
+                      <span class="schedule-time-tag">${
+                        item.start_time || ""
+                      }</span>
+                      <span class="schedule-address">${
+                        item.address || ""
+                      }</span>
                     </div>
                   </div>
-                `).join('')
+                `
+                      )
+                      .join("")
               }
             </div>
           </div>
         `;
-      }).join('')}
+        })
+        .join("")}
+    </div>
+    
+    <div style="margin-top:16px;margin-bottom:120px;text-align:center">
+      <button class="btn" id="confirm" style="width:100%">일정 확정</button>
     </div>
   `;
+  
+  // 확정 버튼 클릭 이벤트
+  $("#confirm").onclick = confirmCurrentSchedule;
 }
 
 /** 타임테이블 렌더(그룹드 우선) - 기존 함수 유지 */
@@ -1091,6 +1234,18 @@ function renderTableFromSchedule(sched) {
   } else {
     container.innerHTML = "";
   }
+  
+  // 일정이 생성되었으면 확정 버튼 추가
+  if (groups.length || tl.length) {
+    container.innerHTML += `
+      <div style="margin-top:16px;margin-bottom:120px;text-align:center">
+        <button class="btn" id="confirm" style="width:100%">일정 확정</button>
+      </div>
+    `;
+    
+    // 확정 버튼 클릭 이벤트
+    $("#confirm").onclick = confirmCurrentSchedule;
+  }
 }
 
 /** 미니 캘린더 렌더링 (홈 화면, 여행 요약에서 사용) */
@@ -1116,50 +1271,55 @@ function renderMiniCalendar(events, container, title = "캘린더") {
     <div class="section-title">${title}</div>
     <div class="timetable">${list}</div>
   `;
-  
+
   if (container) {
     container.appendChild(cal);
   }
-  
+
   return cal;
 }
 
 /** 홈 캘린더 업데이트 (일정 확정 시 호출) */
 function updateHomeCalendar() {
   if (!STATE.last_schedule?.itinerary) return;
-  
-  console.log('일정 확정 - 캘린더 업데이트 시작', STATE.last_schedule.itinerary);
-  
+
+  console.log(
+    "일정 확정 - 캘린더 업데이트 시작",
+    STATE.last_schedule.itinerary
+  );
+
   // 일정을 캘린더 이벤트로 변환
-  STATE.last_schedule.itinerary.forEach(item => {
+  STATE.last_schedule.itinerary.forEach((item) => {
     if (item.date && item.name) {
       // 날짜 형식: "09월 05일 (금)" -> YYYY-MM-DD로 변환
       const dateMatch = item.date.match(/(\d{2})월 (\d{2})일/);
       if (!dateMatch) return;
-      
+
       const currentYear = new Date().getFullYear();
-      const month = dateMatch[1].padStart(2, '0');
-      const day = dateMatch[2].padStart(2, '0');
+      const month = dateMatch[1].padStart(2, "0");
+      const day = dateMatch[2].padStart(2, "0");
       const fullDate = `${currentYear}-${month}-${day}`;
       const yearMonth = `${currentYear}-${month}`;
-      
+
       console.log(`일정 추가: ${item.date} -> ${fullDate}, 활동: ${item.name}`);
-      
+
       // 캘린더 데이터 구조에 맞게 저장
       STATE.calendar[yearMonth] = STATE.calendar[yearMonth] || {};
-      STATE.calendar[yearMonth][fullDate] = STATE.calendar[yearMonth][fullDate] || [];
-      
+      STATE.calendar[yearMonth][fullDate] =
+        STATE.calendar[yearMonth][fullDate] || [];
+
       // 중복 방지
-      const exists = STATE.calendar[yearMonth][fullDate].some(event => 
-        event.activity === item.name && event.type === item.schedule_type
+      const exists = STATE.calendar[yearMonth][fullDate].some(
+        (event) =>
+          event.activity === item.name && event.type === item.schedule_type
       );
-      
+
       if (!exists) {
         STATE.calendar[yearMonth][fullDate].push({
           activity: item.name,
-          date: item.date + (item.start_time ? ` ${item.start_time}` : ''),
+          date: item.date + (item.start_time ? ` ${item.start_time}` : ""),
           type: item.schedule_type,
-          day: item.day
+          day: item.day,
         });
         console.log(`캘린더에 추가됨: ${fullDate} - ${item.name}`);
       } else {
@@ -1167,7 +1327,7 @@ function updateHomeCalendar() {
       }
     }
   });
-  
+
   // 로컬스토리지에 저장
   localStorage.setItem("ims_calendar", JSON.stringify(STATE.calendar));
 }
@@ -1252,7 +1412,7 @@ async function generateFromSelections() {
     renderHomeTimeline();
   } catch (e) {
     console.error("일정 생성 에러:", e);
-    
+
     if (e.message.includes("Invalid JSON")) {
       alert("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } else if (e.message.includes("HTTP")) {
@@ -1270,7 +1430,7 @@ async function generateFromSelections() {
 async function handleScheduleFeedback(feedback) {
   addMsg(feedback, true);
   showLoading("일정을 수정하고 있습니다...");
-  
+
   try {
     const sched = await sendScheduleFeedback(feedback);
     hideLoading();
@@ -1279,7 +1439,7 @@ async function handleScheduleFeedback(feedback) {
   } catch (e) {
     console.error("일정 수정 에러:", e);
     hideLoading();
-    
+
     if (e.message.includes("Invalid JSON")) {
       addMsg("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } else if (e.message.includes("HTTP")) {
@@ -1302,7 +1462,7 @@ async function reviseScheduleWithFeedback(feedback) {
     renderHomeTimeline();
   } catch (e) {
     console.error("일정 수정 에러:", e);
-    
+
     if (e.message.includes("Invalid JSON")) {
       alert("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } else if (e.message.includes("HTTP")) {
@@ -1323,11 +1483,10 @@ async function confirmCurrentSchedule() {
     await confirmSchedule();
     addMsg("일정을 확정했어요. 홈 화면의 캘린더에서 확인하실 수 있습니다!");
     updateHomeCalendar();
-    
+
     // 일정 확정 후 홈 화면으로 즉시 이동
     STATE.tab = "home";
     render();
-    
   } catch (e) {
     console.error(e);
     alert("확정에 실패했습니다.");
@@ -1341,15 +1500,18 @@ async function confirmCurrentSchedule() {
 function renderChat() {
   const c = $(".container");
   const seed = localStorage.getItem("ims_home_query") || "";
-  
+
   // 기존 채팅 내용이 있는지 확인
   const existingChat = $("#chat");
   let chatContent = "";
-  
+
   if (!existingChat) {
     // 처음 렌더링할 때만 초기 메시지 추가
     chatContent = `
-      <div class="msg bot">언제 어디로 떠날 계획이신가요?</div>
+      <div class="msg bot">
+        <img src="./assets/icons/leaf.png" alt="leaf" class="leaf-icon" />
+        <div class="msg-content">언제 어디로 떠날 계획이신가요?</div>
+      </div>
       ${seed ? `<div class="msg me">${seed}</div>` : ""}
     `;
   } else {
@@ -1358,35 +1520,29 @@ function renderChat() {
   }
 
   c.innerHTML = `
-    <div class="card">
-      <div class="section-title">일여행 계획하기</div>
-      <div class="chat" id="chat">
-        ${chatContent}
-      </div>
+    <div class="chat" id="chat">
+      ${chatContent}
+    </div>
 
       <div id="cardsWrap"></div>
       <div id="pickedWrap"></div>
       <div id="tableWrap"></div>
 
-      <div class="inputbar">
-        <input class="input" id="chatInput" placeholder="원하는 조건을 말해보세요 (예: 전주 당일치기)">
-        <button class="btn" id="send">▶</button>
+      <div class="inputbar" style="position:relative;border:none;padding:0">
+        <input class="input" id="chatInput" placeholder="어떤 곳으로 떠나고 싶으신가요?" 
+               style="border-radius:24px;padding-right:50px;border:1px solid #36A756;width:100%;box-sizing:border-box">
+        <button id="send" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;padding:8px">
+          <img src="./assets/icons/kite.png" alt="send" style="width:24px;height:24px">
+        </button>
       </div>
-      <div style="display:flex; gap:8px; margin-top:8px">
-        <button class="btn secondary" id="confirm">일정 확정</button>
-        <button class="btn ghost" id="homeBack">홈</button>
-      </div>
-    </div>`;
-
-  $("#homeBack").onclick = () => navigate("home");
-  $("#confirm").onclick = confirmCurrentSchedule;
+    `;
 
   // 채팅 전송 - 상황에 따라 다르게 처리
   $("#send").onclick = async () => {
     const text = $("#chatInput").value.trim();
     if (!text) return;
     $("#chatInput").value = "";
-    
+
     // 타임테이블이 이미 생성된 상태라면 피드백으로 처리
     if (STATE.chatStage === "table" && STATE.last_schedule) {
       await handleScheduleFeedback(text);
@@ -1414,62 +1570,61 @@ function renderOnboard() {
   const container = $(".container");
   container.innerHTML = `
     <div class="steps-indicator">1/5</div>
-    <div class="card">
-      <!-- 타이틀 줄바꿈 -->
-      <div class="h1">새롭게 떠나고픈 당신,<br>일멍쉬멍 프로필을 만들어 볼까요?</div>
+    
+    <!-- 타이틀 줄바꿈 -->
+    <div class="h1">새롭게 떠나고픈 당신,<br>일멍쉬멍 프로필을 만들어 볼까요?</div>
 
-      <!-- 닉네임 -->
-      <input class="input mb-12" id="nick" placeholder="닉네임" />
+    <!-- 닉네임 -->
+    <input class="input mb-12" id="nick" placeholder="닉네임" />
 
-      <!-- 거주지 라벨 -->
-      <div class="form-label mt-12">거주지</div>
-      <div class="grid grid-2 mb-12">
-        <select id="sido">
-          <option value="">시/도</option>
-          ${[
-            "서울",
-            "부산",
-            "대전",
-            "대구",
-            "광주",
-            "울산",
-            "세종",
-            "경기",
-            "강원",
-            "충북",
-            "충남",
-            "전북",
-            "전남",
-            "경북",
-            "경남",
-            "제주",
-          ]
-            .map((s) => `<option>${s}</option>`)
-            .join("")}
-        </select>
-        <input class="input" id="sigungu" placeholder="시/군/구" />
-      </div>
-
-      <!-- 나이 -->
-      <input class="input mb-12" id="age" placeholder="나이" />
-
-      <!-- 성별 -->
-      <div class="form-label">성별</div>
-      <div class="radio-row">
-        <label><input type="radio" name="gender" value="M"> 남</label>
-        <label><input type="radio" name="gender" value="F"> 여</label>
-      </div>
-
-      <div class="section-title">누구와 떠날까요?</div>
-      <div class="badges" id="withWho">
-        ${["혼자", "친구와", "연인과", "배우자와", "부모님과", "기타"]
-          .map((s) => `<button class="badge">${s}</button>`)
+    <!-- 거주지 라벨 -->
+    <div class="form-label mt-12">거주지</div>
+    <div class="grid grid-2 mb-12">
+      <select id="sido">
+        <option value="">시/도</option>
+        ${[
+          "서울",
+          "부산",
+          "대전",
+          "대구",
+          "광주",
+          "울산",
+          "세종",
+          "경기",
+          "강원",
+          "충북",
+          "충남",
+          "전북",
+          "전남",
+          "경북",
+          "경남",
+          "제주",
+        ]
+          .map((s) => `<option>${s}</option>`)
           .join("")}
-      </div>
-
-      <div style="height:12px"></div>
-      <button class="btn btn-lg" id="next1">다음</button>
+      </select>
+      <input class="input" id="sigungu" placeholder="시/군/구" />
     </div>
+
+    <!-- 나이 -->
+    <input class="input mb-12" id="age" placeholder="나이" />
+
+    <!-- 성별 -->
+    <div class="form-label">성별</div>
+    <div class="radio-row">
+      <label><input type="radio" name="gender" value="M"> 남</label>
+      <label><input type="radio" name="gender" value="F"> 여</label>
+    </div>
+
+    <div class="section-title">누구와 떠날까요?</div>
+    <div class="badges" id="withWho">
+      ${["혼자", "친구와", "연인과", "배우자와", "부모님과", "기타"]
+        .map((s) => `<button class="badge">${s}</button>`)
+        .join("")}
+    </div>
+
+    <div style="height:12px"></div>
+    <button class="btn btn-lg" id="next1">다음</button>
   `;
 
   setupBadgeToggle(
@@ -1508,28 +1663,28 @@ function renderOnboard2() {
     { label: "섬", desc: "낚시 · 섬마을 체험" },
   ];
   container.innerHTML = `
+    <button class="back-button" id="back2">←</button>
     <div class="steps-indicator">2/5</div>
-    <div class="card">
-      <div class="step-hero">
-        <img src="./assets/icons/landscape.png" alt="풍경 아이콘">
-      </div>
-      <div class="h1">어떤 풍경을 좋아하시나요?</div>
-      <div class="sub">유사한 자연환경을 우선으로 추천해드릴게요.</div>
-
-      <div class="list-rows" id="sceneRows">
-        ${rows
-          .map(
-            (r) => `
-          <div class="row">
-            <button class="badge">${r.label}</button>
-            <div class="desc">${r.desc}</div>
-          </div>`
-          )
-          .join("")}
-      </div>
-
-      <button class="btn btn-lg" id="next2">다음</button>
+    
+    <div class="step-hero">
+      <img src="./assets/icons/landscape.png" alt="풍경 아이콘">
     </div>
+    <div class="h1">어떤 풍경을 좋아하시나요?</div>
+    <div class="sub">유사한 자연환경을 우선으로 추천해 드릴게요.</div>
+
+    <div class="list-rows" id="sceneRows">
+      ${rows
+        .map(
+          (r) => `
+        <div class="row">
+          <button class="badge">${r.label}</button>
+          <div class="desc">${r.desc}</div>
+        </div>`
+        )
+        .join("")}
+    </div>
+
+    <button class="btn btn-lg" id="next2">다음</button>
   `;
   setupBadgeToggle(
     "sceneRows",
@@ -1539,6 +1694,7 @@ function renderOnboard2() {
       saveState();
     }
   );
+  $("#back2").onclick = () => navigate("onboard");
   $("#next2").onclick = () => navigate("onboard3");
 }
 
@@ -1555,28 +1711,28 @@ function renderOnboard3() {
     { label: "사진 스팟", desc: "일출 · 일몰 · SNS 핫플" },
   ];
   container.innerHTML = `
+    <button class="back-button" id="back3">←</button>
     <div class="steps-indicator">3/5</div>
-    <div class="card">
-      <div class="step-hero">
-        <img src="./assets/icons/camera.png" alt="스타일 아이콘">
-      </div>
-      <div class="h1">내가 선호하는 여행 스타일은?</div>
-      <div class="sub">유사한 활동을 우선으로 추천해드릴게요.</div>
-
-      <div class="list-rows" id="styleRows">
-        ${rows
-          .map(
-            (r) => `
-          <div class="row">
-            <button class="badge">${r.label}</button>
-            <div class="desc">${r.desc}</div>
-          </div>`
-          )
-          .join("")}
-      </div>
-
-      <button class="btn btn-lg" id="next3">다음</button>
+    
+    <div class="step-hero">
+      <img src="./assets/icons/camera.png" alt="스타일 아이콘">
     </div>
+    <div class="h1">내가 선호하는 여행 스타일은?</div>
+    <div class="sub">유사한 활동을 우선으로 추천해 드릴게요.</div>
+
+    <div class="list-rows" id="styleRows">
+      ${rows
+        .map(
+          (r) => `
+        <div class="row">
+          <button class="badge">${r.label}</button>
+          <div class="desc">${r.desc}</div>
+        </div>`
+        )
+        .join("")}
+    </div>
+
+    <button class="btn btn-lg" id="next3">다음</button>
   `;
   setupBadgeToggle(
     "styleRows",
@@ -1586,6 +1742,7 @@ function renderOnboard3() {
       saveState();
     }
   );
+  $("#back3").onclick = () => navigate("onboard2");
   $("#next3").onclick = () => navigate("onboard4");
 }
 
@@ -1600,28 +1757,28 @@ function renderOnboard4() {
     { label: "농기계", desc: "농기계 안전 교육 및 관리 체험" },
   ];
   container.innerHTML = `
+    <button class="back-button" id="back4">←</button>
     <div class="steps-indicator">4/5</div>
-    <div class="card">
-      <div class="step-hero">
-        <img src="./assets/icons/farm.png" alt="체험/일자리 아이콘">
-      </div>
-      <div class="h1">원하시는 체험·일자리를 알려주세요.</div>
-      <div class="sub">유사한 체험과 일손 돕기를 우선으로 추천해드릴게요.</div>
-
-      <div class="list-rows" id="jobRows">
-        ${rows
-          .map(
-            (r) => `
-          <div class="row">
-            <button class="badge">${r.label}</button>
-            <div class="desc">${r.desc}</div>
-          </div>`
-          )
-          .join("")}
-      </div>
-
-      <button class="btn btn-lg" id="next4">다음</button>
+    
+    <div class="step-hero">
+      <img src="./assets/icons/farm.png" alt="체험/일자리 아이콘">
     </div>
+    <div class="h1">원하시는 체험·일자리를 알려주세요.</div>
+    <div class="sub">유사한 체험과 일손 돕기를 우선으로 추천해 드릴게요.</div>
+
+    <div class="list-rows" id="jobRows">
+      ${rows
+        .map(
+          (r) => `
+        <div class="row">
+          <button class="badge">${r.label}</button>
+          <div class="desc">${r.desc}</div>
+        </div>`
+        )
+        .join("")}
+    </div>
+
+    <button class="btn btn-lg" id="next4">다음</button>
   `;
   setupBadgeToggle(
     "jobRows",
@@ -1631,29 +1788,31 @@ function renderOnboard4() {
       saveState();
     }
   );
+  $("#back4").onclick = () => navigate("onboard3");
   $("#next4").onclick = () => navigate("onboard5");
 }
 
 function renderOnboard5() {
   const container = $(".container");
   container.innerHTML = `
+    <button class="back-button" id="back5">←</button>
     <div class="steps-indicator">5/5</div>
-    <div class="card">
-      <div class="step-hero">
-        <img src="./assets/icons/search.png" alt="완료 아이콘">
-      </div>
-      <div class="h1">어떤 여행을 선호하시나요?</div>
-      <div class="sub">자유롭게 적어주세요!</div>
-
-      <input class="input mb-12" id="free1" placeholder="활동 1 (ex. 뚜벅이 여행)">
-      <input class="input mb-12" id="free2" placeholder="활동 2 (ex. 자연 산책)">
-      <input class="input mb-12" id="free3" placeholder="활동 3 (ex. 사진 스팟)">
-      <input class="input mb-12" id="free4" placeholder="활동 4 (ex. 숨겨진 맛집)">
-      <input class="input mb-12" id="free5" placeholder="활동 5 (ex. 빵, 디저트 투어)">
-
-      <button class="btn btn-lg" id="finish">완료</button>
+    
+    <div class="step-hero">
+      <img src="./assets/icons/search.png" alt="완료 아이콘">
     </div>
+    <div class="h1">어떤 여행을 선호하시나요?</div>
+    <div class="sub">자유롭게 적어주세요!</div>
+
+    <input class="input mb-12" id="free1" placeholder="활동 1 (ex. 뚜벅이 여행)">
+    <input class="input mb-12" id="free2" placeholder="활동 2 (ex. 자연 산책)">
+    <input class="input mb-12" id="free3" placeholder="활동 3 (ex. 사진 스팟)">
+    <input class="input mb-12" id="free4" placeholder="활동 4 (ex. 숨겨진 맛집)">
+    <input class="input mb-12" id="free5" placeholder="활동 5 (ex. 빵, 디저트 투어)">
+
+    <button class="btn btn-lg" id="finish">완료</button>
   `;
+  $("#back5").onclick = () => navigate("onboard4");
   $("#finish").onclick = async (e) => {
     const btn = e.currentTarget;
     STATE.prefs.free = [1, 2, 3, 4, 5]
@@ -1679,7 +1838,20 @@ function renderOnboard5() {
 }
 
 function render() {
-  renderHeader();
+  // 온보딩 화면에서는 헤더 숨기기
+  const isOnboarding = STATE.view && STATE.view.startsWith("onboard");
+  const headerEl = $(".header");
+
+  // body에 현재 view 설정
+  document.body.setAttribute("data-view", STATE.view || "home");
+
+  if (isOnboarding) {
+    headerEl.style.display = "none";
+  } else {
+    headerEl.style.display = "flex";
+    renderHeader();
+  }
+
   const map = {
     onboard: renderOnboard,
     onboard2: renderOnboard2,
