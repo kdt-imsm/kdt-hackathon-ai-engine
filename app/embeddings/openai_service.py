@@ -153,3 +153,55 @@ class OpenAIService:
         
         print(f"🔍 향상된 키워드 세트: {enhanced_keywords}")
         return enhanced_keywords
+    
+    def get_embedding(self, text: str) -> List[float]:
+        """
+        텍스트의 임베딩 벡터를 생성합니다.
+        
+        Args:
+            text: 임베딩을 생성할 텍스트
+            
+        Returns:
+            1536차원 임베딩 벡터
+        """
+        try:
+            response = self.client.embeddings.create(
+                model="text-embedding-3-small",
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            print(f"❌ 임베딩 생성 실패: {e}")
+            return [0.0] * 1536  # 기본 벡터 반환
+    
+    def calculate_cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """
+        두 벡터 간의 코사인 유사도를 계산합니다.
+        
+        Args:
+            vec1: 첫 번째 벡터
+            vec2: 두 번째 벡터
+            
+        Returns:
+            코사인 유사도 (0-1)
+        """
+        try:
+            import math
+            
+            # 내적 계산
+            dot_product = sum(a * b for a, b in zip(vec1, vec2))
+            
+            # 벡터 크기 계산
+            magnitude1 = math.sqrt(sum(a * a for a in vec1))
+            magnitude2 = math.sqrt(sum(a * a for a in vec2))
+            
+            # 코사인 유사도 계산
+            if magnitude1 * magnitude2 == 0:
+                return 0.0
+            
+            similarity = dot_product / (magnitude1 * magnitude2)
+            return max(0.0, min(1.0, similarity))  # 0-1 범위로 제한
+            
+        except Exception as e:
+            print(f"❌ 코사인 유사도 계산 실패: {e}")
+            return 0.0
