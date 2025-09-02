@@ -910,7 +910,15 @@ function normalizeCards(reco) {
 
 /** 카드 UI 템플릿 */
 function renderCardsSection(title, list, key) {
-  return `<div class="section-title">${title}</div>
+  // 제목에 따라 적절한 아이콘 추가
+  let titleWithIcon = title;
+  if (title.includes("농촌 체험 및 소일거리")) {
+    titleWithIcon = `${title} <img src="./assets/icons/farm.png" alt="farm" class="section-title-icon">`;
+  } else if (title.includes("힐링 테마 여행")) {
+    titleWithIcon = `${title} <img src="./assets/icons/paper-lantern.png" alt="lantern" class="section-title-icon">`;
+  }
+  
+  return `<div class="section-title">${titleWithIcon}</div>
   <div class="carousel">${list
     .map(
       (x) => `

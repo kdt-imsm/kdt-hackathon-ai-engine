@@ -539,75 +539,9 @@ class SimpleSchedulingService:
                         "photo": tour.get("image_url", "")
                     })
         
-        # AI 일정 생성 프롬프트
-        system_prompt = self._build_system_prompt(duration)
-        user_prompt = self._build_user_prompt(
-            natural_request, selected_farm, all_tours_for_schedule, preferences, duration, start_date_str, start_date_obj
-        )
-        
-        try:
-            response = self.openai_service.client.chat.completions.create(
-                model="gpt-4o-mini",  # 비용 최적화
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.3
-            )
-            
-            import json
-            result = json.loads(response.choices[0].message.content)
-            
-            itinerary_data = result.get("itinerary", [])
-            
-            print(f"🤖 AI 생성 일정: 총 {len(itinerary_data)}개 일정, 예상 일수 {duration}일")
-            for item in itinerary_data:
-                print(f"   Day {item.get('day')}: {item.get('schedule_type')} - {item.get('name')}")
-            
-            # AI 결과 검증: 일정 배치 규칙이 제대로 지켜졌는지 확인
-            if not self._validate_schedule_rules(itinerary_data, duration, selected_farm):
-                print("❌ AI 일정이 규칙을 위반함 - 규칙 기반으로 폴백")
-                return self._generate_rule_based_schedule(duration, start_date_str, start_date_obj, selected_farm, all_tours_for_schedule, region)
-            
-            schedule_text = self._format_itinerary_as_text(itinerary_data)
-            bubble_schedule = self._format_bubble_friendly_schedule(itinerary_data, duration)
-            
-            # 숙박, 음식점 데이터 추가
-            accommodations = []
-            restaurants = []
-            if region:
-                regional_accommodations = self._load_regional_accommodations(region)
-                regional_restaurants = self._load_regional_restaurants(region)
-                accommodations = self._get_accommodation_cards(regional_accommodations, 5)
-                restaurants = self._get_restaurant_cards(regional_restaurants, 5)
-            
-            return {
-                "status": "success",
-                "data": {
-                    "itinerary_id": f"schedule_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                    "total_days": duration,
-                    "days": duration,
-                    "itinerary": itinerary_data,  # 기존 형태 (호환성 유지)
-                    "schedule_text": schedule_text,
-                    "bubble_schedule": bubble_schedule,  # Bubble 친화적 구조
-                    "accommodations": accommodations,
-                    "restaurants": restaurants,
-                    "region": region,
-                    # Bubble 접근성 향상을 위한 추가 필드
-                    "summary": {
-                        "duration": duration,
-                        "farm_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '농가']),
-                        "tour_days_count": len([item for item in itinerary_data if item.get('schedule_type') == '관광지']),
-                        "region": region
-                    }
-                }
-            }
-            
-        except Exception as e:
-            print(f"❌ AI 일정 생성 실패: {e}")
-            # 폴백: 규칙 기반 일정 생성
-            return self._generate_rule_based_schedule(duration, start_date_str, start_date_obj, selected_farm, all_tours_for_schedule, region)
+        # 속도 최적화를 위해 AI Agent 비활성화하고 바로 규칙 기반 일정 생성 사용
+        print("⚡ 속도 최적화: 규칙 기반 일정 생성 사용")
+        return self._generate_rule_based_schedule(duration, start_date_str, start_date_obj, selected_farm, all_tours_for_schedule, region)
     
     def generate_travel_summary(self, 
                                itinerary_data: List[Dict], 
@@ -914,7 +848,7 @@ class SimpleSchedulingService:
                     "farm_name": farm_info.get('name', ''),
                     "farm_address": farm_info.get('address', ''),
                     "work_time": f"{farm_info.get('start_time', '08:00')}-{farm_info.get('end_time', '17:00')}",
-                    "description": f"Day {start_day}-{end_day}: {farm_info.get('name', '')} 농가 일정"
+                    "description": f"Day {start_day}~{end_day}: {farm_info.get('name', '')} 농가 일정"
                 }
         
         # 관광지 일정들 
@@ -953,7 +887,7 @@ class SimpleSchedulingService:
             grouped_items.append({
                 "order": 2,
                 "type": "farm_period",
-                "title": f"Day {farm_period['start_day']}-{farm_period['end_day']}: 농가 체험",
+                "title": f"Day {farm_period['start_day']}~{farm_period['end_day']}: 농가 체험",
                 "subtitle": farm_period['farm_name'],
                 "description": f"{farm_period['duration_days']}일간 농가 일정 ({farm_period['work_time']})",
                 "details": farm_period
@@ -1146,7 +1080,7 @@ class SimpleSchedulingService:
         else:
             # 관광지가 부족한 경우 추가 관광지 찾기
             print(f"🔍 마지막날 관광지 부족, 추가 관광지 검색 중...")
-            additional_tours = self._get_additional_tours_for_schedule(region, preferences, 1)
+            additional_tours = self._get_additional_attractions(region, [], {}, 1)
             if additional_tours:
                 print(f"🏁 추가 관광지 배치: {additional_tours[0].get('name', '이름없음')}")
                 tour_schedule[duration] = [{"tour": additional_tours[0], "time": "10:00"}]

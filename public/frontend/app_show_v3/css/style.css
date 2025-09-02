@@ -1,109 +1,417 @@
+:root {
+  --primary: #36a756; /* ✅ 대표색 */
+  --accent: #f7c948;
+  --bg: #f7f9f7;
+  --ink: #222;
+  --muted: #667085;
+  --card: #fff;
+  --radius: 18px;
+}
 
-:root{
-    --primary:#36A756;                 /* ✅ 대표색 */
-    --accent:#F7C948;
-    --bg:#F7F9F7;
-    --ink:#222;
-    --muted:#667085;
-    --card:#fff;
-    --radius:18px;
-  }  
-*{box-sizing:border-box} html,body{margin:0;padding:0;height:100%;background:#e8eee8}
-body{font-family:system-ui,-apple-system,Roboto,'Apple SD Gothic Neo','Noto Sans KR',Segoe UI,Arial,sans-serif;color:var(--ink)}
-.app{max-width:420px;margin:0 auto;min-height:100vh;background:white;box-shadow:0 0 40px rgba(0,0,0,.05);position:relative}
-.header{position:sticky;top:0;z-index:50;background:var(--card);display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #eef0ee}
-.logo{display:flex;align-items:center;gap:8px;font-weight:900}
-.hamburger{margin-left:auto;border:none;background:transparent;min-width:40px;min-height:40px;border-radius:10px}
-.hamburger:active{background:#eef6ee}
-.container{padding:12px 16px 24px 16px}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #e8eee8;
+}
+body {
+  font-family: "NanumSquare", sans-serif;
+  color: var(--ink);
+}
+.app {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: white;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eef0ee;
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+}
+.hamburger {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 10px;
+}
+.hamburger:active {
+  background: #eef6ee;
+}
+.container {
+  padding: 12px 16px 24px 16px;
+}
 
 /* 온보딩 화면의 컨테이너 스타일 - 고정 버튼을 위한 높이 설정 */
 body[data-view^="onboard"] .container {
-  padding-top: 60px;  /* 상단 여백 */
-  padding-bottom: 120px;  /* 고정 버튼을 위한 하단 여백 */
+  padding-top: 60px; /* 상단 여백 */
+  padding-bottom: 120px; /* 고정 버튼을 위한 하단 여백 */
   position: relative;
-  min-height: 100vh;  /* 전체 화면 높이 */
+  min-height: 100vh; /* 전체 화면 높이 */
   box-sizing: border-box;
 }
 
 /* 첫 번째 온보딩 페이지 - 좌우 여백 증가 및 요소 정렬 */
 body[data-view="onboard"] .container {
-  padding-top: 80px;  /* 첫 번째 페이지만 상단 여백 증가 */
-  padding-left: 32px;  /* 좌측 여백 증가 */
-  padding-right: 32px;  /* 우측 여백 증가 */
+  padding-top: 80px; /* 첫 번째 페이지만 상단 여백 증가 */
+  padding-left: 32px; /* 좌측 여백 증가 */
+  padding-right: 32px; /* 우측 여백 증가 */
 }
-.card{background:var(--card);border:1px solid #edf2ed;border-radius:var(--radius);padding:5px;box-shadow:0 6px 18px rgba(0,0,0,.04)}
-.btn{background:var(--primary);color:#fff;border:none;border-radius:12px;padding:14px 18px;font-weight:800;display:inline-flex;gap:8px;align-items:center;justify-content:center}
-.btn.secondary{background:var(--accent);color:#111}
-.btn.ghost{background:#f4f7f4;color:#111}
-.grid{display:grid;gap:10px}.grid-2{grid-template-columns:1fr 1fr}
-.input,select,textarea{width:100%;padding:14px;border-radius:12px;border:1px solid #e5e7eb;background:white}
-.badges{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}.badge{border:1.5px solid #e5e7eb;border-radius:999px;padding:10px 16px;font-weight:400;background:#ffffff;color:#222;transition:all 0.2s ease}
-.section-title{font-size:18px;font-weight:normal;margin:8px 0;text-align:center}
+.card {
+  background: var(--card);
+  border: 1px solid #edf2ed;
+  border-radius: var(--radius);
+  padding: 5px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+}
+.btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-weight: 800;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.btn.secondary {
+  background: var(--accent);
+  color: #111;
+}
+.btn.ghost {
+  background: #f4f7f4;
+  color: #111;
+}
+.grid {
+  display: grid;
+  gap: 10px;
+}
+.grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+.input,
+select,
+textarea {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: white;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.badge {
+  border: 1.5px solid #e5e7eb;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 400;
+  background: #ffffff;
+  color: #222;
+  transition: all 0.2s ease;
+}
+.section-title {
+  font-size: 16px;
+  font-weight: normal;
+  margin: 8px 0;
+  text-align: center;
+}
 
 /* 카드 섹션 제목 스타일 (추천! 농촌 체험 등) */
-#cardsWrap .section-title{font-size:14px;text-align:left;margin:12px 0 8px 0}
-.muted{color:var(--muted);font-size:13px}
-.steps-indicator{position:sticky;top:56px;z-index:10;text-align:right;font-weight:800;padding:8px 16px;color:#9aa0a6}
+#cardsWrap .section-title {
+  font-size: 16px;
+  text-align: left;
+  margin: 12px 0 8px 0;
+}
+
+/* 섹션 제목 아이콘 스타일 */
+.section-title-icon {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  margin-left: 2px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.steps-indicator {
+  position: sticky;
+  top: 56px;
+  z-index: 10;
+  text-align: right;
+  font-weight: 800;
+  padding: 8px 16px;
+  color: #9aa0a6;
+}
 
 /* Drawer (sidebar) */
-.drawer{position:fixed;left:0;top:0;width:100%;height:100vh;z-index:60;display:none}
-.drawer.open{display:block}
-.drawer .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45)}
-.drawer .panel{position:absolute;left:0;top:0;height:100%;width:84%;max-width:360px;background:#fff;border-right:1px solid #eaeaea;padding:18px 14px;overflow:auto}
-.history-item{padding:12px;border-bottom:1px solid #f0f0f0}
-.brand{display:flex;align-items:center;gap:8px;font-weight:900;font-size:20px}
-.pill{background:var(--primary);color:#fff;padding:4px 8px;border-radius:8px}
+.drawer {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100vh;
+  z-index: 60;
+  display: none;
+}
+.drawer.open {
+  display: block;
+}
+.drawer .backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.drawer .panel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 84%;
+  max-width: 360px;
+  background: #fff;
+  border-right: 1px solid #eaeaea;
+  padding: 18px 14px;
+  overflow: auto;
+}
+.history-item {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+  font-size: 20px;
+}
+.pill {
+  background: var(--primary);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
 
 /* Tabs */
-.tabs{display:flex;gap:8px;margin-bottom:10px}
-.tab{padding:10px 14px;border:1px solid #e5e7eb;border-radius:999px;background:#fff;font-weight:normal}
-.tab.active{background:#e9f8e3;border-color:#76d062;color:#114b14}
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tab {
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  font-weight: normal;
+}
+.tab.active {
+  background: #e9f8e3;
+  border-color: #76d062;
+  color: #114b14;
+}
 
 /* Calendar */
-.calendar{background:#fff;border:2px solid #3e9a2d22;border-radius:16px;padding:12px}
-.cal-head{display:flex;align-items:center;justify-content:space-between;padding:8px 6px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px}
-.cal-cell{height:44px;border-radius:10px;background:#f6faf6;display:flex;align-items:center;justify-content:center;font-weight:700;color:#475569;position:relative}
-.cal-cell.muted{background:#f9faf9;color:#c1c6c6}
-.cal-cell.has{background:#e9f8e3;border:1.5px solid #7dd56f;color:#134e13}
-.cal-cell .dot{position:absolute;bottom:6px;width:6px;height:6px;border-radius:5px;background:var(--primary)}
+.calendar {
+  background: #fff;
+  border: 2px solid #3e9a2d22;
+  border-radius: 16px;
+  padding: 12px;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 6px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 8px;
+}
+.cal-cell {
+  height: 44px;
+  border-radius: 10px;
+  background: #f6faf6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #475569;
+  position: relative;
+}
+.cal-cell.muted {
+  background: #f9faf9;
+  color: #c1c6c6;
+}
+.cal-cell.has {
+  background: #e9f8e3;
+  border: 1.5px solid #7dd56f;
+  color: #134e13;
+}
+.cal-cell .dot {
+  position: absolute;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 5px;
+  background: var(--primary);
+}
 
 /* 농가 일정 (기존 녹색 유지) */
-.cal-cell.has.has-farm{background:#e9f8e3 !important;border:1.5px solid #7dd56f;color:#134e13}
-.cal-cell.has.has-farm .dot{background:var(--primary)}
+.cal-cell.has.has-farm {
+  background: #e9f8e3 !important;
+  border: 1.5px solid #7dd56f;
+  color: #134e13;
+}
+.cal-cell.has.has-farm .dot {
+  background: var(--primary);
+}
 
 /* 관광지 일정 (흰색 배경, 녹색 테두리) */
-.cal-cell.has.has-tour{background:#ffffff !important;border:1.5px solid #7dd56f;color:#374151}
-.cal-cell.has.has-tour .dot{background:var(--primary)}
+.cal-cell.has.has-tour {
+  background: #ffffff !important;
+  border: 1.5px solid #7dd56f;
+  color: #374151;
+}
+.cal-cell.has.has-tour .dot {
+  background: var(--primary);
+}
 
 /* 혼합 일정 (농가 + 관광지 모두 있는 날) - 기존 농가 색상 유지 */
-.cal-cell.has.has-mixed{background:#e9f8e3 !important;border:1.5px solid #7dd56f;color:#134e13}
-.cal-cell.has.has-mixed .dot{background:var(--primary)}
+.cal-cell.has.has-mixed {
+  background: #e9f8e3 !important;
+  border: 1.5px solid #7dd56f;
+  color: #134e13;
+}
+.cal-cell.has.has-mixed .dot {
+  background: var(--primary);
+}
 
-.timetable{border-left:4px solid var(--primary);padding-left:14px}
-.timetable .item{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed #e5e7eb}
-.timetable .bullet{width:12px;height:12px;border-radius:50%;background:var(--primary);margin-top:6px}
+.timetable {
+  border-left: 4px solid var(--primary);
+  padding-left: 14px;
+}
+.timetable .item {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #e5e7eb;
+}
+.timetable .bullet {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-top: 6px;
+}
 
 /* Chat */
-.chat{display:flex;flex-direction:column;gap:12px;padding:20px 16px}
-.msg{max-width:80%;padding:12px 14px;border-radius:14px;background:#f1f5f1}
-.msg.me{align-self:flex-end;background:#e8f5e8}
-.inputbar{position:sticky;bottom:0;background:white;padding:10px;border-top:1px solid #eef0ee;display:flex;gap:8px}
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px;
+}
+.msg {
+  max-width: 80%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f1f5f1;
+}
+.msg.me {
+  align-self: flex-end;
+  background: #e8f5e8;
+}
+.inputbar {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding: 10px;
+  border-top: 1px solid #eef0ee;
+  display: flex;
+  gap: 8px;
+}
 
 /* Cards Carousel */
-.carousel{display:flex;gap:12px;overflow:auto;padding-bottom:8px;scroll-snap-type:x mandatory}
-.cardItem{min-width:260px;scroll-snap-align:start;background:#fff;border:1px solid #e8ece8;border-radius:16px;box-shadow:0 4px 14px rgba(0,0,0,.05);overflow:hidden}
-.cardImg{height:140px;background:#eaeaea;background-size:cover;background-position:center}
-.cardBody{padding:12px}
-.cardTitle{font-weight:900;text-align:left}
-.cardLoc{font-size:12px;color:#6b7280;text-align:left}
-.cardFoot{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
-.cardItem.active{
-  outline: 2px solid var(--primary);
-  box-shadow: 0 0 0 2px #0000, 0 0 0 4px rgba(54,167,86,.15);
+.carousel {
+  display: flex;
+  gap: 12px;
+  overflow: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
 }
-.kit{font-size:12px;background:#f6f6f6;border-radius:8px;padding:6px 8px}
+.cardItem {
+  min-width: 260px;
+  scroll-snap-align: start;
+  background: #fff;
+  border: 1px solid #e8ece8;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+.cardImg {
+  height: 140px;
+  background: #eaeaea;
+  background-size: cover;
+  background-position: center;
+}
+.cardBody {
+  padding: 12px;
+}
+.cardTitle {
+  font-weight: 900;
+  text-align: left;
+}
+.cardLoc {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: left;
+}
+.cardFoot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+.cardItem.active {
+  outline: 2px solid var(--primary);
+  box-shadow: 0 0 0 2px #0000, 0 0 0 4px rgba(54, 167, 86, 0.15);
+}
+.kit {
+  font-size: 12px;
+  background: #f6f6f6;
+  border-radius: 8px;
+  padding: 6px 8px;
+}
 
 /* 체크박스 스타일 */
 .checkbox-container {
@@ -172,8 +480,12 @@ body[data-view="onboard"] .container {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* 스케줄 테이블 */
@@ -264,15 +576,25 @@ body[data-view="onboard"] .container {
   color: #888;
 }
 
-.notice{background:#fff6d0;border:1px solid #ffe28c;padding:12px;border-radius:12px}
-.footer-space{height:30px}
-small.key{font-family:monospace;color:#888}
+.notice {
+  background: #fff6d0;
+  border: 1px solid #ffe28c;
+  padding: 12px;
+  border-radius: 12px;
+}
+.footer-space {
+  height: 30px;
+}
+small.key {
+  font-family: monospace;
+  color: #888;
+}
 
 /* 입력/셀렉트 기본 크기 업 (iOS 확대 방지용 폰트 16px 이상) */
 .input,
 select {
   height: 52px;
-  font-size: 16px;        /* iOS 자동 줌 방지 */
+  font-size: 16px; /* iOS 자동 줌 방지 */
   padding: 14px 16px;
   border-radius: 12px;
 }
@@ -281,7 +603,7 @@ select {
 select {
   -webkit-appearance: none;
   appearance: none;
-  padding-right: 38px;     /* 화살표 자리 */
+  padding-right: 38px; /* 화살표 자리 */
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 16px;
@@ -300,77 +622,91 @@ select {
 .badges .badge {
   background: #ffffff;
   border: 1.5px solid #e5e7eb;
-  color: #222;  /* 검정 텍스트로 변경 */
+  color: #222; /* 검정 텍스트로 변경 */
   transition: all 0.2s ease;
 }
 
 .badges .badge.active {
-  background: #ffffff;  /* 흰색 배경 */
-  border: 1.5px solid #6DBE45;  /* 초록색 테두리 */
-  color: #6DBE45;  /* 초록색 텍스트 */
+  background: #ffffff; /* 흰색 배경 */
+  border: 1.5px solid #6dbe45; /* 초록색 테두리 */
+  color: #6dbe45; /* 초록색 텍스트 */
   transition: all 0.2s ease;
 }
 
 /* ===== 타이포/레이블 ===== */
-.h1{
-    font-size: 20px;
-    font-weight: normal;
-    line-height: 1.35;
-    margin: 4px 0 14px;
-    text-align: center;  /* 제목 중앙 정렬 */
-  }
-  .form-label{
-    font-size: 14px;       /* 2,3) 거주지/성별 소제목 조금 작게 */
-    font-weight: normal;   /* 볼드 제거 */
-    color: #1f2937;
-    margin: 12px 0 6px;
-  }
-  
-  /* 2) placeholder 글꼴 크기 줄이기 */
-  .input::placeholder,
-  textarea::placeholder{
-    font-size: 14px;
-    color: #9aa6b2;
-  }
-  
-  /* 3) 성별 라디오 한 줄 정렬 */
-  .radio-row{
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 30px;
-  }
-  .radio-row label{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    font-size:14px;
-  }
-  
-  /* ===== 여백 유틸 ===== */
-  .mb-8{  margin-bottom: 8px; }
-  .mb-12{ margin-bottom: 12px; }
-  .mt-12{ margin-top: 12px; }
-  
-  /* (유지) 입력/셀렉트 크기 업 */
-  .input,
-  select{
-    height: 52px;
-    font-size: 16px;      /* iOS 확대 방지 */
-    padding: 14px 16px;
-    border-radius: 12px;
-  }
-  
-  /* (유지) 셀렉트 화살표 공간/가독성 */
-  select{
-    -webkit-appearance:none;
-    appearance:none;
-    padding-right:38px;
-    background-repeat:no-repeat;
-    background-position:right 12px center;
-    background-size:16px;
-  }
-  
+.h1 {
+  font-family: "NanumSquare", sans-serif;
+  font-size: 20px;
+  font-weight: 700; /* Bold */
+  line-height: 1.35;
+  margin: 4px 0 14px;
+  text-align: center;
+}
+.form-label {
+  font-size: 14px;
+  font-weight: 600; /* Semi-Bold 느낌 */
+  color: #1f2937;
+  margin: 12px 0 6px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600; /* Semi-Bold 느낌 */
+  margin: 8px 0;
+  text-align: center;
+}
+
+/* 2) placeholder 글꼴 크기 줄이기 */
+.input::placeholder,
+textarea::placeholder {
+  font-size: 14px;
+  color: #9aa6b2;
+}
+
+/* 3) 성별 라디오 한 줄 정렬 */
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 30px;
+}
+.radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+/* ===== 여백 유틸 ===== */
+.mb-8 {
+  margin-bottom: 8px;
+}
+.mb-12 {
+  margin-bottom: 12px;
+}
+.mt-12 {
+  margin-top: 12px;
+}
+
+/* (유지) 입력/셀렉트 크기 업 */
+.input,
+select {
+  height: 52px;
+  font-size: 16px; /* iOS 확대 방지 */
+  padding: 14px 16px;
+  border-radius: 12px;
+}
+
+/* (유지) 셀렉트 화살표 공간/가독성 */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 38px;
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+
 /* ========== 온보딩 공통 ========== */
 
 /* 온보딩 이전 버튼 */
@@ -399,24 +735,24 @@ select {
 /* 온보딩 단계 표시 - 화면 가장자리에서 조금 아래로 */
 .steps-indicator {
   position: absolute;
-  top: 20px;  /* 12px에서 20px로 증가 */
+  top: 20px; /* 12px에서 20px로 증가 */
   right: 16px;
   padding: 0;
   font-weight: 600;
   font-size: 16px;
-  color: #6DBE45;  /* 초록색으로 변경 */
+  color: #6dbe45; /* 초록색으로 변경 */
   z-index: 100;
 }
 
 /* 온보딩 화면 제외 다른 화면의 여백 */
-body:not([data-view^="onboard"]) .step-hero, 
-body:not([data-view^="onboard"]) .h1, 
-body:not([data-view^="onboard"]) .sub, 
-body:not([data-view^="onboard"]) .form-label, 
-body:not([data-view^="onboard"]) .radio-row, 
-body:not([data-view^="onboard"]) .section-title, 
-body:not([data-view^="onboard"]) .badges, 
-body:not([data-view^="onboard"]) .list-rows, 
+body:not([data-view^="onboard"]) .step-hero,
+body:not([data-view^="onboard"]) .h1,
+body:not([data-view^="onboard"]) .sub,
+body:not([data-view^="onboard"]) .form-label,
+body:not([data-view^="onboard"]) .radio-row,
+body:not([data-view^="onboard"]) .section-title,
+body:not([data-view^="onboard"]) .badges,
+body:not([data-view^="onboard"]) .list-rows,
 body:not([data-view^="onboard"]) .btn.btn-lg {
   margin-left: 8px;
   margin-right: 8px;
@@ -447,211 +783,293 @@ body[data-view="onboard"] .btn.btn-lg {
 }
 
 /* 카드 상단 중앙 아이콘 */
-.step-hero{
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    margin: 8px 0 12px;
-  }
-  .step-hero img{
-    width: 80px;           /* 필요하면 80~120px로 조절 */
-    height: 80px;
-    object-fit: contain;
-    display: block;
-  }
-  
-  /* 보조설명 */
-  .sub{ font-size:13px; color:#6b7280; margin-top:2px; text-align: center; }
-  
-  /* 세로 리스트(키워드 시작점 일치) - 키워드 양에 따른 여백 조정 */
-  .list-rows{ 
-    margin: 10px 0 16px; 
-    max-width: 300px;  /* 최대 너비 제한 */
-    margin-left: auto;  /* 중앙 정렬을 위해 */
-    margin-right: auto; /* 중앙 정렬을 위해 */
-  }
-  .list-rows .row{
-    display:flex; align-items:center; justify-content:flex-start; gap:12px;
-    padding:8px 0;  /* 키워드가 많을 때를 고려하여 여백 줄임 */
-  }
+.step-hero {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+.step-hero img {
+  width: 80px; /* 필요하면 80~120px로 조절 */
+  height: 80px;
+  object-fit: contain;
+  display: block;
+}
 
-  /* 키워드가 많은 화면의 여백 조정 */
-  body[data-view="onboard4"] .list-rows .row,
-  body[data-view="onboard3"] .list-rows .row {
-    padding: 6px 0;  /* 더 적은 여백 */
-  }
+/* 보조설명 */
+.sub {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 2px;
+  text-align: center;
+}
 
-  /* 첫 번째 페이지 레이아웃 조정 - 여백 통일 및 축소 */
-  body[data-view="onboard"] .h1 {
-    margin-bottom: 30px;  /* 제목 하단 여백 */
-    text-align: left;  /* 제목 왼쪽 정렬 */
-  }
+/* 세로 리스트(키워드 시작점 일치) - 키워드 양에 따른 여백 조정 */
+.list-rows {
+  margin: 10px 0 16px;
+  max-width: 300px; /* 최대 너비 제한 */
+  margin-left: auto; /* 중앙 정렬을 위해 */
+  margin-right: auto; /* 중앙 정렬을 위해 */
+}
+.list-rows .row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 8px 0; /* 키워드가 많을 때를 고려하여 여백 줄임 */
+}
 
-  body[data-view="onboard"] .input.mb-12 {
-    margin-bottom: 12px;  /* 닉네임과 나이 필드 간격 축소 */
-  }
+/* 키워드가 많은 화면의 여백 조정 */
+body[data-view="onboard4"] .list-rows .row,
+body[data-view="onboard3"] .list-rows .row {
+  padding: 6px 0; /* 더 적은 여백 */
+}
 
-  body[data-view="onboard"] .form-label.mt-12 {
-    margin-top: 12px;  /* 거주지 라벨 상단 여백 축소 */
-  }
+/* 첫 번째 페이지 레이아웃 조정 - 여백 통일 및 축소 */
+body[data-view="onboard"] .h1 {
+  margin-bottom: 30px; /* 제목 하단 여백 */
+  text-align: left; /* 제목 왼쪽 정렬 */
+}
 
-  body[data-view="onboard"] .grid.grid-2.mb-12 {
-    margin-bottom: 12px;  /* 거주지 선택 하단 여백 축소 */
-  }
+body[data-view="onboard"] .input.mb-12 {
+  margin-bottom: 12px; /* 닉네임과 나이 필드 간격 축소 */
+}
 
-  body[data-view="onboard"] .radio-row {
-    margin-bottom: 32px;  /* 성별 선택 후 여백을 늘려서 섹션 간 구분 */
-  }
+body[data-view="onboard"] .form-label.mt-12 {
+  margin-top: 12px; /* 거주지 라벨 상단 여백 축소 */
+}
 
+body[data-view="onboard"] .grid.grid-2.mb-12 {
+  margin-bottom: 12px; /* 거주지 선택 하단 여백 축소 */
+}
 
-  body[data-view="onboard"] .badges {
-    margin: 12px 0 30px;  /* 키워드 섹션 여백 축소 */
-    gap: 8px;  /* 키워드 간격 조정 */
-    justify-content: flex-start;  /* 키워드들 왼쪽 정렬 */
-  }
+body[data-view="onboard"] .radio-row {
+  margin-bottom: 32px; /* 성별 선택 후 여백을 늘려서 섹션 간 구분 */
+}
 
-  /* 첫 번째 페이지 라벨들 크기 및 여백 통일 */
-  body[data-view="onboard"] .form-label {
-    margin: 12px 0 8px;  /* 라벨 여백 축소 및 통일 */
-    text-align: left;  /* 라벨 왼쪽 정렬 */
-    font-size: 16px;  /* 통일된 크기 */
-    font-weight: normal;  /* 볼드 제거 */
-  }
+body[data-view="onboard"] .badges {
+  margin: 12px 0 30px; /* 키워드 섹션 여백 축소 */
+  gap: 8px; /* 키워드 간격 조정 */
+  justify-content: flex-start; /* 키워드들 왼쪽 정렬 */
+}
 
-  body[data-view="onboard"] .section-title {
-    margin: 20px 0 12px;  /* "누구와 떠날까요?" 섹션 여백 축소 */
-    text-align: left;  /* 섹션 제목 왼쪽 정렬 */
-    font-size: 16px;  /* form-label과 동일한 크기 */
-    font-weight: normal;  /* 볼드 제거 */
-  }
-  .list-rows .row .badge{
-    min-width:86px; justify-content:center;
-    padding:10px 16px; font-weight:400;
-    flex-shrink: 0;  /* 키워드 크기 고정 */
-  }
-  .list-rows .row .desc{ font-size:13px; color:#374151; }
-  
-  /* ✅ 선택 토글(모든 화면에서 일관 적용) */
-  .badge.active{                     /* .badges, .list-rows 어디서든 적용 */
-    background:#6DBE45;
-    border-color:#6DBE45;
-    color:#fff;
-    transition:all .2s ease;
-  }
+/* 첫 번째 페이지 라벨들 크기 및 여백 통일 */
+body[data-view="onboard"] .form-label {
+  margin: 12px 0 8px; /* 라벨 여백 축소 및 통일 */
+  text-align: left; /* 라벨 왼쪽 정렬 */
+  font-size: 16px; /* 통일된 크기 */
+  font-weight: normal; /* 볼드 제거 */
+}
 
-  /* 온보딩 리스트 행에서 선택되지 않은 키워드 스타일 */
+body[data-view="onboard"] .section-title {
+  margin: 20px 0 12px; /* "누구와 떠날까요?" 섹션 여백 축소 */
+  text-align: left; /* 섹션 제목 왼쪽 정렬 */
+  font-size: 16px; /* form-label과 동일한 크기 */
+  font-weight: normal; /* 볼드 제거 */
+}
+.list-rows .row .badge {
+  min-width: 86px;
+  justify-content: center;
+  padding: 10px 16px;
+  font-weight: 400;
+  flex-shrink: 0; /* 키워드 크기 고정 */
+}
+.list-rows .row .desc {
+  font-size: 13px;
+  color: #374151;
+}
+
+/* ✅ 선택 토글(모든 화면에서 일관 적용) */
+.badge.active {
+  /* .badges, .list-rows 어디서든 적용 */
+  background: #6dbe45;
+  border-color: #6dbe45;
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+/* 온보딩 리스트 행에서 선택되지 않은 키워드 스타일 */
+.list-rows .row .badge {
+  background: #ffffff;
+  border: 1.5px solid #e5e7eb;
+  color: #222; /* 검정 텍스트로 변경 */
+  transition: all 0.2s ease;
+}
+
+/* 온보딩 리스트 행에서 선택된 키워드 스타일 - 스크린샷과 일치 */
+.list-rows .row .badge.active {
+  background: #ffffff; /* 흰색 배경 */
+  border: 1.5px solid #6dbe45; /* 초록색 테두리 */
+  color: #6dbe45; /* 초록색 텍스트 */
+}
+
+/* ✅ CTA 버튼 더 크고 길게 (카드 가로 꽉) */
+.btn.btn-lg {
+  width: 100%;
+  height: 50px;
+  font-size: 17px;
+  border-radius: 14px;
+  margin-top: 15px; /* 기본 상단 여백 */
+}
+
+/* 온보딩 화면의 다음 버튼 - 고정 위치, 모든 화면 동일한 너비 */
+body[data-view^="onboard"] .btn.btn-lg {
+  position: absolute;
+  bottom: 50px; /* 화면 하단에서 50px */
+  left: 32px; /* 모든 온보딩 화면에서 동일한 좌측 여백 */
+  right: 32px; /* 모든 온보딩 화면에서 동일한 우측 여백 */
+  width: auto; /* left, right로 너비 자동 조정 */
+  height: 50px;
+  font-size: 17px;
+  border-radius: 14px;
+  margin: 0; /* 기존 마진 제거 */
+  z-index: 10; /* 다른 요소 위에 표시 */
+}
+
+/* 마지막 온보딩 페이지(5/5) 여백 조정 */
+body[data-view="onboard5"] .sub {
+  margin-bottom: 24px; /* '자유롭게 적어주세요!' 문구 하단 여백 증가 */
+}
+
+/* 챗봇 헤더 스타일 */
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.header-leaf {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+/* 챗봇 메시지 스타일 조정 */
+.msg.bot {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 80%;
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.msg.bot .leaf-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  object-fit: contain;
+  margin-top: 4px;
+}
+
+.msg.bot .msg-content {
+  background: #f1f5f1;
+  padding: 12px 14px;
+  border-radius: 14px;
+  flex: 1;
+}
+
+/* 카피바라님 텍스트 스타일 */
+.user-nickname {
+  color: #6dbe45;
+  font-weight: 600;
+}
+
+/* 로딩 점들 스타일 */
+.loading-dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: #ccc;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* 가운데 점만 초록색 */
+.loading-dots span.active {
+  background: #6dbe45;
+}
+
+/* 작은 화면 미세 조정 */
+@media (max-width: 380px) {
+  .step-hero img {
+    width: 88px;
+    height: 88px;
+  }
+  .list-rows .row {
+    padding: 10px 0;
+    gap: 10px;
+  }
   .list-rows .row .badge {
-    background: #ffffff;
-    border: 1.5px solid #e5e7eb;
-    color: #222;  /* 검정 텍스트로 변경 */
-    transition: all 0.2s ease;
+    min-width: 78px;
+    padding: 8px 14px;
   }
+}
 
-  /* 온보딩 리스트 행에서 선택된 키워드 스타일 - 스크린샷과 일치 */
-  .list-rows .row .badge.active {
-    background: #ffffff;  /* 흰색 배경 */
-    border: 1.5px solid #6DBE45;  /* 초록색 테두리 */
-    color: #6DBE45;  /* 초록색 텍스트 */
-  }
-  
-  /* ✅ CTA 버튼 더 크고 길게 (카드 가로 꽉) */
-  .btn.btn-lg{
-    width: 100%;
-    height: 50px;
-    font-size: 17px;
-    border-radius: 14px;
-    margin-top: 15px;   /* 기본 상단 여백 */
-  }
+/* 달력 이전/다음 버튼 색상 변경 */
+#calendar .cal-head .btn.ghost {
+  color: var(--primary); /* 대표 초록색 */
+  font-weight: 700; /* 조금 더 굵게 */
+  font-size: 20px; /* 크기 키우기 (원하면 조절) */
+  background: transparent; /* 배경 제거 */
+  border: none; /* 테두리 제거 */
+}
 
-  /* 온보딩 화면의 다음 버튼 - 고정 위치, 모든 화면 동일한 너비 */
-  body[data-view^="onboard"] .btn.btn-lg {
-    position: absolute;
-    bottom: 50px;  /* 화면 하단에서 50px */
-    left: 32px;   /* 모든 온보딩 화면에서 동일한 좌측 여백 */
-    right: 32px;  /* 모든 온보딩 화면에서 동일한 우측 여백 */
-    width: auto;  /* left, right로 너비 자동 조정 */
-    height: 50px;
-    font-size: 17px;
-    border-radius: 14px;
-    margin: 0;    /* 기존 마진 제거 */
-    z-index: 10;  /* 다른 요소 위에 표시 */
-  }
-  
-  /* 마지막 온보딩 페이지(5/5) 여백 조정 */
-  body[data-view="onboard5"] .sub {
-    margin-bottom: 24px;  /* '자유롭게 적어주세요!' 문구 하단 여백 증가 */
-  }
+/* B-1. 바깥(body) 스크롤 잠금 */
+html,
+body {
+  height: 100%;
+}
+body {
+  overflow: auto !important;
+}
 
-  /* 챗봇 헤더 스타일 */
-  .header-title {
-    flex: 1;
-    text-align: center;
-    font-weight: normal;
-    font-size: 16px;
-    color: var(--ink);
-  }
+/* 컨테이너를 세로 플렉스로 → 인풋바를 맨 아래로 밀어내기 */
+.app {
+  height: 100dvh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app .container {
+  flex: 1 1 auto;
+  display: flex; /* 세로 플렉스 컨테이너 */
+  flex-direction: column;
+  min-height: 0; /* 플렉스 스크롤 이슈 방지 */
+  overflow-y: auto; /* 내부 스크롤 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(
+    96px + env(safe-area-inset-bottom)
+  ); /* 인풋바 높이+여유 */
+}
 
-  .header-leaf {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
-  }
+/* 인풋바: 처음부터 바닥에 위치 + 스크롤 시 아래에 붙도록(sticky) */
+.app .inputbar {
+  position: sticky !important; /* 내부 스크롤 하단 고정 */
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: none;
+  width: auto;
+  max-width: none;
+  margin-top: auto; /* 초기에 '맨 아래'로 밀어내기 */
+  background: #fff;
+  border-top: 1px solid #eef0ee;
+  padding: 12px 14px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 5;
+}
 
-  /* 챗봇 메시지 스타일 조정 */
-  .msg.bot {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    max-width: 80%;
-    background: transparent !important;
-    padding: 0 !important;
-  }
-
-  .msg.bot .leaf-icon {
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    object-fit: contain;
-    margin-top: 4px;
-  }
-
-  .msg.bot .msg-content {
-    background: #f1f5f1;
-    padding: 12px 14px;
-    border-radius: 14px;
-    flex: 1;
-  }
-
-  /* 카피바라님 텍스트 스타일 */
-  .user-nickname {
-    color: #6DBE45;
-    font-weight: 600;
-  }
-
-  /* 로딩 점들 스타일 */
-  .loading-dots {
-    display: inline-flex;
-    gap: 4px;
-    margin-left: 8px;
-  }
-
-  .loading-dots span {
-    width: 8px;
-    height: 8px;
-    background: #ccc;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  /* 가운데 점만 초록색 */
-  .loading-dots span.active {
-    background: #6DBE45;
-  }
-
-  /* 작은 화면 미세 조정 */
-  @media (max-width: 380px){
-    .step-hero img{ width:88px; height:88px; }
-    .list-rows .row{ padding:10px 0; gap:10px; }
-    .list-rows .row .badge{ min-width:78px; padding:8px 14px; }
-  }
-  
+/* 말풍선과 카드 사이 과도한 공백 방지 */
+.chat {
+  padding-bottom: 16px !important;
+}

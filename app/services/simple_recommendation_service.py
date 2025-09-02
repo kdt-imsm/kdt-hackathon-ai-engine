@@ -216,8 +216,16 @@ class SimpleRecommendationService:
         else:
             final_scored = other_attractions[:20]
         
+        # 마이너스 점수 필터링 (landscape 불일치로 제외된 관광지 제거)
+        positive_scored = [attr for attr in final_scored if attr.score >= 0]
+        
+        # 점수가 양수인 관광지가 충분하지 않으면 0점 관광지도 포함
+        if len(positive_scored) < 20:
+            zero_scored = [attr for attr in final_scored if attr.score == 0]
+            positive_scored = positive_scored + zero_scored[:20-len(positive_scored)]
+        
         # 상위 20개 추출 (이미지 확인용)
-        top_20 = final_scored
+        top_20 = positive_scored[:20]
         
         # 이미지가 있는 관광지만 필터링
         filtered_attractions = []

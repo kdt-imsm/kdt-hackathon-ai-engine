@@ -34,6 +34,46 @@ def parse_keywords(keyword_str: Optional[str]) -> Set[str]:
         return set()
     return set(k.strip() for k in keyword_str.split(';') if k.strip())
 
+def normalize_keyword(keyword: str) -> str:
+    """키워드 정규화 - 공백과 특수문자 제거"""
+    return keyword.replace(' ', '').replace('·', '').replace('/', '').lower()
+
+def keywords_match(user_keyword: str, attraction_keyword: str) -> bool:
+    """
+    키워드 매칭 확인 (부분 매칭 지원)
+    예: "농촌 체험" vs "체험형", "역사 문화" vs "문화·역사"
+    """
+    # 정규화
+    user_norm = normalize_keyword(user_keyword)
+    attr_norm = normalize_keyword(attraction_keyword)
+    
+    # 완전 일치
+    if user_norm == attr_norm:
+        return True
+    
+    # 부분 매칭
+    if user_norm in attr_norm or attr_norm in user_norm:
+        return True
+    
+    # 특별 케이스 매핑
+    mappings = {
+        '농촌체험': ['체험형', '농촌체험', '체험'],
+        '역사문화': ['문화역사', '역사', '문화', '문화재', '역사탐방'],
+        '축제': ['축제이벤트', '이벤트', '축제', '행사'],
+        '힐링': ['힐링여유', '여유', '휴식', '힐링'],
+        '야외활동': ['야외', '활동', '스포츠', '레저'],
+        '먹거리탐방': ['먹거리', '맛집', '음식', '탐방'],
+        '사진스팟': ['사진', '포토존', '스팟', '경관'],
+    }
+    
+    for key, values in mappings.items():
+        if user_norm == key or key in user_norm:
+            for val in values:
+                if val in attr_norm:
+                    return True
+    
+    return False
+
 
 def calculate_attraction_score(
     attraction: Dict,
@@ -44,10 +84,10 @@ def calculate_attraction_score(
     관광지 점수 계산
     
     점수 계산 로직:
-    1. travel_style_keywords 매칭 (각 매칭당 10점)
-    2. landscape_keywords가 사용자 선택과 전혀 일치하지 않으면 제외 (-1000점)
-    3. landscape_keywords가 일치하면 작은 보너스 (1점) - 동점 처리용
-    4. landscape_keywords가 없으면 페널티 없음 (0점) - 많은 데이터가 landscape 없음
+    1. travel_style_keywords 매칭 (각 매칭당 100점 - 가장 우선)
+    2. landscape_keywords가 사용자 선택과 다르면 제외 (-10000점)
+    3. landscape_keywords가 일치하면 보너스 (10점) - 동점 처리용
+    4. landscape_keywords가 없으면 일치하는 것과 동일하게 취급 (10점)
     """
     # 관광지 키워드 파싱
     travel_styles = parse_keywords(attraction.get('travel_style_keywords'))
@@ -55,9 +95,16 @@ def calculate_attraction_score(
     if pd.isna(landscape):
         landscape = None
     
-    # travel_style 매칭 계산
-    travel_style_matches = len(user_travel_styles & travel_styles)
-    travel_style_score = travel_style_matches * 10
+    # travel_style 매칭 계산 (가중치 대폭 증가)
+    # 부분 매칭 지원을 위해 개선된 매칭 로직 사용
+    travel_style_matches = 0
+    for user_style in user_travel_styles:
+        for attr_style in travel_styles:
+            if keywords_match(user_style, attr_style):
+                travel_style_matches += 1
+                break  # 한 user_style당 한 번만 카운트
+    
+    travel_style_score = travel_style_matches * 100  # 각 매칭당 100점
     
     # landscape 매칭 계산 (복수 선택 지원)
     landscape_score = 0
@@ -67,12 +114,16 @@ def calculate_attraction_score(
         # 사용자가 선택한 landscape 중 하나라도 일치하는지 확인
         if landscape in user_landscapes:
             # 일치하는 경우 보너스 (동점 처리용)
-            landscape_score = 5
+            landscape_score = 10
             landscape_match = True
         else:
-            # 일치하지 않아도 완전히 제외하지 않고 작은 페널티만
-            landscape_score = -2
-    # landscape가 없는 경우는 0점 (페널티 없음, 일치하는 것과 동일하게 취급)
+            # 다른 경우 완전히 제외 (매우 큰 페널티)
+            landscape_score = -10000
+    elif user_landscapes and not landscape:
+        # landscape가 없는 경우는 일치하는 것과 동일하게 취급
+        landscape_score = 10
+        landscape_match = True
+    # 사용자가 landscape를 선택하지 않은 경우는 0점
     
     total_score = travel_style_score + landscape_score
     
