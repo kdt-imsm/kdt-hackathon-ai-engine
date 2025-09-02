@@ -76,6 +76,7 @@ body[data-view="onboard"] .container {
   padding-top: 80px; /* 첫 번째 페이지만 상단 여백 증가 */
   padding-left: 32px; /* 좌측 여백 증가 */
   padding-right: 32px; /* 우측 여백 증가 */
+  padding-bottom: 120px;
 }
 .card {
   background: var(--card);
@@ -339,7 +340,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 20px 16px;
+  padding: 16px 12px;
 }
 .msg {
   max-width: 80%;
@@ -915,7 +916,7 @@ body[data-view="onboard"] .section-title {
 /* 온보딩 화면의 다음 버튼 - 고정 위치, 모든 화면 동일한 너비 */
 body[data-view^="onboard"] .btn.btn-lg {
   position: absolute;
-  bottom: 50px; /* 화면 하단에서 50px */
+  bottom: 30px; /* 화면 하단에서 50px */
   left: 32px; /* 모든 온보딩 화면에서 동일한 좌측 여백 */
   right: 32px; /* 모든 온보딩 화면에서 동일한 우측 여백 */
   width: auto; /* left, right로 너비 자동 조정 */
@@ -1022,7 +1023,7 @@ body[data-view="onboard5"] .sub {
   border: none; /* 테두리 제거 */
 }
 
-/* B-1. 바깥(body) 스크롤 잠금 */
+/* 바깥(body) 스크롤 잠금 */
 html,
 body {
   height: 100%;
@@ -1039,7 +1040,8 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-.app .container {
+
+body[data-view="chat"] .container {
   flex: 1 1 auto;
   display: flex; /* 세로 플렉스 컨테이너 */
   flex-direction: column;
@@ -1048,12 +1050,12 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding-bottom: calc(
-    96px + env(safe-area-inset-bottom)
+    20px + env(safe-area-inset-bottom)
   ); /* 인풋바 높이+여유 */
 }
 
-/* 인풋바: 처음부터 바닥에 위치 + 스크롤 시 아래에 붙도록(sticky) */
-.app .inputbar {
+/* 인풋바: 처음부터 바닥에 위치 + 스크롤 시 아래에 붙도록(sticky) (채팅 화면 전용) */
+body[data-view="chat"] .inputbar {
   position: sticky !important; /* 내부 스크롤 하단 고정 */
   bottom: 0;
   left: 0;
@@ -1063,8 +1065,9 @@ body {
   max-width: none;
   margin-top: auto; /* 초기에 '맨 아래'로 밀어내기 */
   background: #fff;
-  border-top: 1px solid #eef0ee;
+  border-top: 15px solid #ffffff !important;
   padding: 12px 14px;
+  padding-top: 40px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 5;
 }
@@ -1072,4 +1075,71 @@ body {
 /* 말풍선과 카드 사이 과도한 공백 방지 */
 .chat {
   padding-bottom: 16px !important;
+}
+
+/* 상단 '초기화' 버튼 고정 + 부드러운 숨김 전환 */
+body > button.btn.ghost[onclick*="hardReset"]{
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
+  z-index: 1001;
+  transition: transform .25s ease, opacity .2s ease;
+  will-change: transform, opacity;
+}
+
+/* 숨김 상태 */
+body > button.btn.ghost[onclick*="hardReset"].is-hidden{
+  transform: translateY(-150%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* chat 내부에 들어온 카드/테이블 블록 여백 정리 */
+.chat .chat-block {
+  margin: 8px 0;
+}
+
+/* 로딩 점 애니메이션(실제 움직이는 느낌) */
+.loading-dots span {
+  width: 8px; height: 8px; display: inline-block; border-radius: 50%;
+  background: #cfd6cf; opacity: .35; animation: ld-bounce 1.2s infinite ease-in-out;
+}
+.loading-dots span:nth-child(2){ animation-delay: .15s; }
+.loading-dots span:nth-child(3){ animation-delay: .3s; }
+@keyframes ld-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+  40% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* 채팅 타임라인 안에서 '카드/타임테이블' 같은 대형 블록용 래퍼 */
+.chat .chat-block {
+  margin: 12px 0;
+  width: 100%;
+}
+
+/* 말풍선이 아니라 '넓은 블록'로 보이게 */
+.chat .chat-block .msg-content,
+.chat .chat-block .card,
+.chat .chat-block .schedule-table {
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* 일정 확정 아래 여백 축소: 기존 inline margin-bottom:120px 무력화 */
+.chat .chat-block div[style*="margin-bottom:120px"]{
+  margin-bottom: 30px !important; /* 필요 시 16~32px로 조절 */
+}
+
+/* 스크롤 잠금 해제 (전역) */
+.app { overflow: visible !important; }
+
+/* 채팅 화면에서만 내부 스크롤 유지가 필요할 경우에만 잠금 */
+body[data-view="chat"] .app { overflow: hidden !important; }
+
+/* 채팅 추천 카드 섹션 제목은 카드와 왼쪽 여백 맞춤 */
+.chat-block .section-title {
+  text-align: left;
+  margin-left: 0;
+  margin-right: 0;
 }

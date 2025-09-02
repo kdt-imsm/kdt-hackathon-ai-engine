@@ -7,22 +7,36 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
     />
     <title>일멍쉬멍</title>
+
+    <!-- PWA -->
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./assets/icons/icon.svg" />
     <meta name="theme-color" content="#6DBE45" />
+    <!-- iOS 전체화면 & 아이콘 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="./assets/icons/leaf.png" />
+
+    <!-- 파비콘(브라우저 탭용) -->
+    <link rel="icon" href="./assets/icons/leaf.png" />
+
+    <!-- CSS -->
     <link rel="stylesheet" href="./css/style.css" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/gh/PotLid/NanumSquare/nanumsquare.css"
     />
-    <button class="btn ghost" onclick="hardReset()">초기화</button>
   </head>
   <body>
+    <!-- ✅ 버튼은 body에서 렌더링되어야 함 -->
+    <button class="btn ghost" onclick="hardReset()">초기화</button>
+
     <div class="app">
       <div class="header"></div>
       <div class="drawer"></div>
       <div class="container"></div>
     </div>
-    <script src="./js/app.js"></script>
+
+    <script src="./js/app.js"></script>    
   </body>
 </html>
+

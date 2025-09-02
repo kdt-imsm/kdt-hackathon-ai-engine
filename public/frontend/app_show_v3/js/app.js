@@ -752,18 +752,21 @@ function hideLoading() {
   if (loading) loading.remove();
 }
 
-// 추천 API 호출 함수 (재사용)
+// 추천 API 호출 함수 (채팅 타임라인으로 흐르게, 중복 말풍선 방지)
 async function triggerRecommendation(natural_request, skipUserMessage = false) {
+  const chat = $("#chat");
+  const scrollBottom = () => { chat.scrollTop = chat.scrollHeight; };
+
   try {
-    if (!skipUserMessage) {
-      addMsg(natural_request, true);
-    }
+    // ❶ 사용자 말풍선은 여기서 만들지 않음 (중복 방지)
+    //   -> send 핸들러에서 addMsg(text, true) 후 triggerRecommendation(text, true)로 호출
+
+    // ❷ 상단 로딩(오버레이/토스트)
     const userNick = STATE.profile?.nick || "사용자";
     showLoading(`${userNick}님 취향에 딱 맞는 맞춤형 선택지를 찾고 있어요!`);
 
+    // ❸ 엔진 호출
     const reco = await engineRecommend(natural_request);
-    console.log("[recommendations] raw:", reco);
-
     const farms = reco?.data?.farms || [];
     const tours = reco?.data?.tour_spots || [];
 
@@ -771,9 +774,11 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
 
     if (!farms.length && !tours.length) {
       addMsg("조건에 맞는 추천이 없어요. 기간/지역을 조금 넓혀볼까요?");
+      scrollBottom();
       return;
     }
 
+    // ❹ 카드 매핑 (기존 로직 유지)
     const farmCards = farms.map((f) => ({
       id: f.farm_id || f.id || crypto.randomUUID(),
       title: f.title || f.farm || "농가 체험",
@@ -784,7 +789,6 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
       kind: "jobs",
       raw: f,
     }));
-
     const tourCards = tours.map((t) => ({
       id: t.tour_id || t.contentid || t.id || crypto.randomUUID(),
       title: t.name || "관광지",
@@ -793,66 +797,92 @@ async function triggerRecommendation(natural_request, skipUserMessage = false) {
       kind: "tours",
       raw: t,
     }));
-
     CURRENT_RECO = { jobs: farmCards, tours: tourCards };
 
-    $("#cardsWrap").innerHTML = `
-      ${renderCardsSection(
-        "추천! 농촌 체험 및 소일거리",
-        CURRENT_RECO.jobs,
-        "jobs"
-      )}
-      ${renderCardsSection("추천! 힐링 테마 여행", CURRENT_RECO.tours, "tours")}
+    // ❺ 카드 섹션을 '버블'이 아닌 넓은 블록으로 append
+    const sectionsHtml = [
+      farmCards.length ? renderCardsSection("추천! 농촌 체험 및 소일거리", CURRENT_RECO.jobs, "jobs") : "",
+      tourCards.length ? renderCardsSection("추천! 힐링 테마 여행", CURRENT_RECO.tours, "tours") : ""
+    ].join("");
+
+    const block = document.createElement("div");
+    block.className = "chat-block";
+    block.innerHTML = `
+      ${sectionsHtml}
       <div style="height:8px"></div>
-      <button class="btn" id="makePlan">선택한 카드로 일정 생성하기</button>
+      <button class="btn btn-primary btn-create-schedule" id="makePlan">선택한 카드로 일정 생성하기</button>
     `;
+    chat.appendChild(block);
+    scrollBottom();
 
-    bindCardActions();
-    $("#pickedWrap").innerHTML = renderPicked();
+    // ❻ 카드 선택 바인딩/선택 요약(기존 함수 재사용)
+    if (typeof bindCardActions === "function") bindCardActions();
+    if ($("#pickedWrap")) $("#pickedWrap").innerHTML = renderPicked?.() || "";
 
-    $("#makePlan").onclick = async () => {
-      const btn = $("#makePlan");
-      btn.disabled = true;
-      showLoading("일정을 생성하고 있습니다...");
+    // ❼ CTA 동작: 클릭 한 번만 처리(중복 로딩 버블 방지)
+    const btn = block.querySelector("#makePlan");
+    if (btn) {
+      const onMakePlan = async () => {
+        if (btn._busy) return;
+        btn._busy = true;
+        btn.disabled = true;
 
-      const payload = {
-        user_id: STATE.user_id || "local_user",
-        natural_request: natural_request,
-        selected_farm: (STATE.chosenCards.find((c) => c.kind === "jobs") || {})
-          .raw,
-        selected_tours: STATE.chosenCards
-          .filter((c) => c.kind === "tours")
-          .map((c) => c.raw),
-      };
-      try {
-        const sched = await createScheduleWithUser(payload);
-        hideLoading();
-        btn.remove(); // 버튼 삭제
+        // 채팅용 로딩 말풍선 1개만 표시
+        const doing = document.createElement("div");
+        doing.className = "msg bot";
+        doing.innerHTML = `
+          <img src="./assets/icons/leaf.png" class="leaf-icon" alt="">
+          <div class="msg-content">
+            일정을 생성하고 있습니다...
+            <span class="loading-dots"><span></span><span></span><span></span></span>
+          </div>
+        `;
+        chat.appendChild(doing);
+        scrollBottom();
 
-        STATE.chatStage = "table";
-        saveState();
-        renderScheduleTable(sched);
-      } catch (e) {
-        console.error("일정 생성 에러:", e);
-        hideLoading();
+        // showLoading("일정을 생성하고 있습니다...");
 
-        if (e.message.includes("Invalid JSON")) {
-          addMsg("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-        } else if (e.message.includes("HTTP")) {
-          addMsg("서버 연결에 문제가 있습니다. 네트워크 상태를 확인해 주세요.");
-        } else {
-          addMsg("일정 생성에 실패했어요. 다시 시도해 주세요.");
+        const payload = {
+          user_id: STATE.user_id || "local_user",
+          natural_request: natural_request,
+          selected_farm: (STATE.chosenCards.find((c) => c.kind === "jobs") || {}).raw,
+          selected_tours: STATE.chosenCards.filter((c) => c.kind === "tours").map((c) => c.raw),
+        };
+
+        try {
+          const sched = await createScheduleWithUser(payload);
+          hideLoading();
+          doing.remove();
+          btn.remove();
+
+          STATE.chatStage = "table";
+          saveState?.();
+          renderScheduleTable(sched); // ⬅️ 아래에서 '넓은 블록'으로 append
+          scrollBottom();
+        } catch (e) {
+          hideLoading();
+          doing.remove();
+          console.error("일정 생성 에러:", e);
+
+          if (e.message?.includes?.("Invalid JSON")) {
+            addMsg("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+          } else if (e.message?.includes?.("HTTP")) {
+            addMsg("서버 연결에 문제가 있습니다. 네트워크 상태를 확인해 주세요.");
+          } else {
+            addMsg("일정 생성에 실패했어요. 다시 시도해 주세요.");
+          }
+          btn.disabled = false;
+          btn._busy = false;
+          scrollBottom();
         }
-
-        btn.disabled = false;
-      }
-    };
+      };
+      btn.addEventListener("click", onMakePlan, { once: true });
+    }
   } catch (e) {
-    console.warn("recommendations error:", e);
     hideLoading();
-    addMsg(
-      `추천을 불러오지 못했어요. 서버 연결을 확인해 주세요. (${e.message})`
-    );
+    console.warn("recommendations error:", e);
+    addMsg(`추천을 불러오지 못했어요. 서버 연결을 확인해 주세요. (${e.message})`);
+    chat.scrollTop = chat.scrollHeight;
   }
 }
 
@@ -1051,93 +1081,66 @@ function addMsg(text, me = false) {
   $("#chat").scrollTop = $("#chat").scrollHeight;
 }
 
-/** 개선된 스케줄 테이블 렌더링 */
+/** 스케줄 테이블을 '말풍선'이 아닌 넓은 블록으로 채팅 타임라인에 append */
 function renderScheduleTable(sched) {
-  const container = $("#tableWrap");
+  const chat = $("#chat");
   const itinerary = sched?.itinerary || [];
 
+  // 빈 경우도 채팅에 표시
   if (!itinerary.length) {
-    container.innerHTML =
-      '<div class="muted">일정이 생성되지 않았습니다.</div>';
+    const empty = document.createElement("div");
+    empty.className = "msg bot";
+    empty.innerHTML = `
+      <img src="./assets/icons/leaf.png" class="leaf-icon" />
+      <div class="msg-content muted">일정이 생성되지 않았습니다.</div>`;
+    chat.appendChild(empty);
+    chat.scrollTop = chat.scrollHeight;
     return;
   }
 
   // 일정 그룹화 (농가는 연속으로, 관광지는 같은 날짜끼리)
   const groupedSchedule = [];
   let currentGroup = null;
-
   itinerary.forEach((item) => {
     if (item.schedule_type === "농가") {
       if (currentGroup && currentGroup.type === "농가") {
-        // 기존 농가 그룹에 추가
         currentGroup.endDay = item.day;
         currentGroup.items.push(item);
       } else {
-        // 새로운 농가 그룹 시작
         if (currentGroup) groupedSchedule.push(currentGroup);
-        currentGroup = {
-          type: "농가",
-          startDay: item.day,
-          endDay: item.day,
-          items: [item],
-        };
+        currentGroup = { type: "농가", startDay: item.day, endDay: item.day, items: [item] };
       }
     } else {
-      // 관광지는 같은 날짜끼리 그룹화
-      if (
-        currentGroup &&
-        currentGroup.type === "관광지" &&
-        currentGroup.startDay === item.day
-      ) {
-        // 같은 날짜의 관광지 그룹에 추가
+      if (currentGroup && currentGroup.type === "관광지" && currentGroup.startDay === item.day) {
         currentGroup.items.push(item);
       } else {
-        // 새로운 관광지 그룹 시작
         if (currentGroup) groupedSchedule.push(currentGroup);
-        currentGroup = {
-          type: "관광지",
-          startDay: item.day,
-          endDay: item.day,
-          items: [item],
-        };
+        currentGroup = { type: "관광지", startDay: item.day, endDay: item.day, items: [item] };
       }
     }
   });
-
-  // 마지막 그룹 추가
   if (currentGroup) groupedSchedule.push(currentGroup);
 
-  container.innerHTML = `
+  // 테이블 마크업 (기존 구조 유지)
+  const tableHtml = `
     <div class="section-title" style="text-align:left">생성된 여행 일정</div>
     <div class="schedule-table">
-      ${groupedSchedule
-        .map((group) => {
-          const dayRange =
-            group.startDay === group.endDay
-              ? `Day ${group.startDay}`
-              : `Day ${group.startDay} ~ ${group.endDay}`;
-
-          const firstItem = group.items[0];
-
-          return `
+      ${groupedSchedule.map((group) => {
+        const dayRange = group.startDay === group.endDay ? `Day ${group.startDay}` : `Day ${group.startDay} ~ ${group.endDay}`;
+        const firstItem = group.items[0];
+        return `
           <div class="schedule-item">
             <div class="schedule-day">${dayRange}</div>
             <div class="schedule-content">
               <div class="schedule-date-with-type">
                 <span class="schedule-date">${firstItem.date}</span>
-                <span class="schedule-type${
-                  firstItem.schedule_type === "관광지" ? " tour" : ""
-                }">${
-            firstItem.schedule_type === "관광지"
-              ? "관광"
-              : firstItem.schedule_type
-          }</span>
+                <span class="schedule-type${firstItem.schedule_type === "관광지" ? " tour" : ""}">
+                  ${firstItem.schedule_type === "관광지" ? "관광" : firstItem.schedule_type}
+                </span>
               </div>
-              
               ${
                 group.type === "농가"
-                  ? // 농가는 중복 제거하여 한 번만 표시
-                    (() => {
+                  ? (() => {
                       const uniqueItems = [];
                       const seen = new Set();
                       group.items.forEach((item) => {
@@ -1147,57 +1150,97 @@ function renderScheduleTable(sched) {
                           uniqueItems.push(item);
                         }
                       });
-                      return uniqueItems
-                        .map(
-                          (item) => `
-                    <div class="schedule-place">
-                      <div class="schedule-name">${item.name}</div>
-                      <div class="schedule-details">
-                        <span class="schedule-time-tag">${
-                          item.start_time || ""
-                        }</span>
-                        <span class="schedule-address">${
-                          item.address || ""
-                        }</span>
-                      </div>
-                    </div>
-                  `
-                        )
-                        .join("");
+                      return uniqueItems.map((item) => `
+                        <div class="schedule-place">
+                          <div class="schedule-name">${item.name}</div>
+                          <div class="schedule-details">
+                            <span class="schedule-time-tag">${item.start_time || ""}</span>
+                            <span class="schedule-address">${item.address || ""}</span>
+                          </div>
+                        </div>`).join("");
                     })()
-                  : // 관광지는 모든 항목 표시
-                    group.items
-                      .map(
-                        (item) => `
-                  <div class="schedule-place">
-                    <div class="schedule-name">${item.name}</div>
-                    <div class="schedule-details">
-                      <span class="schedule-time-tag">${
-                        item.start_time || ""
-                      }</span>
-                      <span class="schedule-address">${
-                        item.address || ""
-                      }</span>
-                    </div>
-                  </div>
-                `
-                      )
-                      .join("")
+                  : group.items.map((item) => `
+                      <div class="schedule-place">
+                        <div class="schedule-name">${item.name}</div>
+                        <div class="schedule-details">
+                          <span class="schedule-time-tag">${item.start_time || ""}</span>
+                          <span class="schedule-address">${item.address || ""}</span>
+                        </div>
+                      </div>`).join("")
               }
+            </div>
+          </div>`;
+      }).join("")}
+    </div>
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn" id="confirm" style="width:100%">일정 확정</button>
+    </div>
+    ${(() => {
+      const accommodations = sched?.accommodations || [];
+      const restaurants = sched?.restaurants || [];
+      
+      let cardsHtml = '';
+      
+      // 숙박 카드
+      if (accommodations.length > 0) {
+        cardsHtml += `
+          <div style="margin-top:24px;">
+            <div class="section-title" style="text-align:left;margin-bottom:12px;font-size:16px;">숙박</div>
+            <div style="display:flex;gap:12px;overflow-x:auto;padding:4px;">
+              ${accommodations.slice(0, 5).map(acc => `
+                <div style="min-width:200px;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+                  <img src="${acc.photo || '/public/images/placeholder_accommodation.jpg'}" 
+                       style="width:100%;height:120px;object-fit:cover;"
+                       onerror="this.src='/public/images/placeholder_accommodation.jpg'" />
+                  <div style="padding:12px;">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${acc.name || '숙박업소'}</div>
+                    <div style="color:#666;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${acc.address || ''}</div>
+                  </div>
+                </div>
+              `).join('')}
             </div>
           </div>
         `;
-        })
-        .join("")}
-    </div>
-    
-    <div style="margin-top:16px;margin-bottom:120px;text-align:center">
-      <button class="btn" id="confirm" style="width:100%">일정 확정</button>
-    </div>
+      }
+      
+      // 음식점 카드
+      if (restaurants.length > 0) {
+        cardsHtml += `
+          <div style="margin-top:24px;margin-bottom:120px;">
+            <div class="section-title" style="text-align:left;margin-bottom:12px;font-size:16px;">음식점</div>
+            <div style="display:flex;gap:12px;overflow-x:auto;padding:4px;">
+              ${restaurants.slice(0, 5).map(rest => `
+                <div style="min-width:200px;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+                  <img src="${rest.photo || '/public/images/placeholder_restaurant.jpg'}" 
+                       style="width:100%;height:120px;object-fit:cover;"
+                       onerror="this.src='/public/images/placeholder_restaurant.jpg'" />
+                  <div style="padding:12px;">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rest.name || '음식점'}</div>
+                    <div style="color:#666;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rest.address || ''}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        // 음식점이 없어도 margin-bottom은 필요
+        cardsHtml += '<div style="margin-bottom:120px;"></div>';
+      }
+      
+      return cardsHtml;
+    })()}
   `;
-  
+
+  // '넓은 블록'으로 채팅에 append (말풍선 X)
+  const block = document.createElement("div");
+  block.className = "chat-block";
+  block.innerHTML = tableHtml;
+  chat.appendChild(block);
+  chat.scrollTop = chat.scrollHeight;
+
   // 확정 버튼 클릭 이벤트
-  $("#confirm").onclick = confirmCurrentSchedule;
+  block.querySelector("#confirm").onclick = confirmCurrentSchedule;
 }
 
 /** 타임테이블 렌더(그룹드 우선) - 기존 함수 유지 */
@@ -1245,11 +1288,64 @@ function renderTableFromSchedule(sched) {
   
   // 일정이 생성되었으면 확정 버튼 추가
   if (groups.length || tl.length) {
-    container.innerHTML += `
-      <div style="margin-top:16px;margin-bottom:120px;text-align:center">
+    let confirmSectionHtml = `
+      <div style="margin-top:16px;text-align:center">
         <button class="btn" id="confirm" style="width:100%">일정 확정</button>
       </div>
     `;
+    
+    // 숙박과 음식점 카드 추가
+    const accommodations = sched?.accommodations || [];
+    const restaurants = sched?.restaurants || [];
+    
+    // 숙박 카드
+    if (accommodations.length > 0) {
+      confirmSectionHtml += `
+        <div style="margin-top:24px;">
+          <div class="section-title" style="text-align:left;margin-bottom:12px;font-size:16px;">숙박</div>
+          <div style="display:flex;gap:12px;overflow-x:auto;padding:4px;">
+            ${accommodations.slice(0, 5).map(acc => `
+              <div style="min-width:200px;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+                <img src="${acc.photo || '/public/images/placeholder_accommodation.jpg'}" 
+                     style="width:100%;height:120px;object-fit:cover;"
+                     onerror="this.src='/public/images/placeholder_accommodation.jpg'" />
+                <div style="padding:12px;">
+                  <div style="font-weight:600;font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${acc.name || '숙박업소'}</div>
+                  <div style="color:#666;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${acc.address || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+    
+    // 음식점 카드
+    if (restaurants.length > 0) {
+      confirmSectionHtml += `
+        <div style="margin-top:24px;margin-bottom:120px;">
+          <div class="section-title" style="text-align:left;margin-bottom:12px;font-size:16px;">음식점</div>
+          <div style="display:flex;gap:12px;overflow-x:auto;padding:4px;">
+            ${restaurants.slice(0, 5).map(rest => `
+              <div style="min-width:200px;background:white;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);overflow:hidden;">
+                <img src="${rest.photo || '/public/images/placeholder_restaurant.jpg'}" 
+                     style="width:100%;height:120px;object-fit:cover;"
+                     onerror="this.src='/public/images/placeholder_restaurant.jpg'" />
+                <div style="padding:12px;">
+                  <div style="font-weight:600;font-size:14px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rest.name || '음식점'}</div>
+                  <div style="color:#666;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${rest.address || ''}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    } else {
+      // 음식점이 없어도 margin-bottom은 필요
+      confirmSectionHtml += '<div style="margin-bottom:120px;"></div>';
+    }
+    
+    container.innerHTML += confirmSectionHtml;
     
     // 확정 버튼 클릭 이벤트
     $("#confirm").onclick = confirmCurrentSchedule;
@@ -1434,9 +1530,11 @@ async function generateFromSelections() {
   }
 }
 
-/** 피드백 처리 함수 */
+/** 피드백 처리 함수 — 사용자 말풍선은 'send' 핸들러에서만 추가 */
 async function handleScheduleFeedback(feedback) {
-  addMsg(feedback, true);
+  // ✅ 중복 원인 제거: 여기서는 사용자 말풍선 추가하지 않음
+  // addMsg(feedback, true);
+
   showLoading("일정을 수정하고 있습니다...");
 
   try {
@@ -1458,28 +1556,44 @@ async function handleScheduleFeedback(feedback) {
   }
 }
 
-/** 피드백(자연어)로 일정 수정 - 기존 함수 유지 */
+/** 피드백(자연어)로 일정 수정 - 말풍선 중복 방지 */
 async function reviseScheduleWithFeedback(feedback) {
   if (!feedback) return;
-  addMsg(feedback, true);
+
+  // 직전 사용자 말풍선과 동일하면 추가하지 않기 (중복 방지)
+  (function dedupeUserBubble(text) {
+    const chat = document.querySelector("#chat");
+    if (!chat) return addMsg(text, true);
+
+    const meMsgs = chat.querySelectorAll(".msg.me");
+    const last = meMsgs[meMsgs.length - 1];
+    const norm = (s) => String(s).replace(/\s+/g, " ").trim();
+
+    if (!last || norm(last.textContent) !== norm(text)) {
+      // ✅ 사용자 버블로만 추가
+      addMsg(text, true);
+    }
+  })(feedback);
+
   try {
     const sched = await sendScheduleFeedback(feedback);
     addMsg("요청하신 내용으로 일정을 수정했어요.");
-    renderTableFromSchedule(sched);
-    updateHomeCalendar();
-    renderHomeTimeline();
+    renderScheduleTable(sched);
+    updateHomeCalendar?.();
+    renderHomeTimeline?.();
   } catch (e) {
     console.error("일정 수정 에러:", e);
 
-    if (e.message.includes("Invalid JSON")) {
+    if (e.message?.includes?.("Invalid JSON")) {
       alert("서버 응답 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-    } else if (e.message.includes("HTTP")) {
+    } else if (e.message?.includes?.("HTTP")) {
       alert("서버 연결에 문제가 있습니다. 네트워크 상태를 확인해 주세요.");
     } else {
       alert("수정에 실패했습니다. 다시 시도해 주세요.");
     }
   }
 }
+
 
 /** 일정 확정 → 채팅 내 미니 캘린더 + 홈 동기화 */
 async function confirmCurrentSchedule() {
@@ -1509,56 +1623,47 @@ function renderChat() {
   const c = $(".container");
   const seed = localStorage.getItem("ims_home_query") || "";
 
-  // 기존 채팅 내용이 있는지 확인
-  const existingChat = $("#chat");
-  let chatContent = "";
-
-  if (!existingChat) {
-    // 처음 렌더링할 때만 초기 메시지 추가
-    chatContent = `
-      <div class="msg bot">
-        <img src="./assets/icons/leaf.png" alt="leaf" class="leaf-icon" />
-        <div class="msg-content">언제 어디로 떠날 계획이신가요?</div>
-      </div>
-      ${seed ? `<div class="msg me">${seed}</div>` : ""}
-    `;
-  } else {
-    // 기존 채팅 내용 보존
-    chatContent = existingChat.innerHTML;
-  }
+  // 기존 채팅 보존
+  const prev = $("#chat");
+  const preserved = prev ? prev.innerHTML : `
+    <div class="msg bot">
+      <img src="./assets/icons/leaf.png" alt="leaf" class="leaf-icon" />
+      <div class="msg-content">언제 어디로 떠날 계획이신가요?</div>
+    </div>
+    ${seed ? `<div class="msg me">${seed}</div>` : ""}
+  `;
 
   c.innerHTML = `
-    <div class="chat" id="chat">
-      ${chatContent}
+    <div class="chat" id="chat">${preserved}</div>
+    <div class="inputbar" style="position:relative;border:none;padding:0">
+      <input class="input" id="chatInput" placeholder="어떤 곳으로 떠나고 싶으신가요?"
+             style="border-radius:24px;padding-right:50px;border:1px solid #36A756;width:100%;box-sizing:border-box">
+      <button id="send" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;padding:8px">
+        <img src="./assets/icons/kite.png" alt="send" style="width:24px;height:24px">
+      </button>
     </div>
+  `;
 
-      <div id="cardsWrap"></div>
-      <div id="pickedWrap"></div>
-      <div id="tableWrap"></div>
+  const scrollBottom = () => { const ch = $("#chat"); if (ch) ch.scrollTop = ch.scrollHeight; };
 
-      <div class="inputbar" style="position:relative;border:none;padding:0">
-        <input class="input" id="chatInput" placeholder="어떤 곳으로 떠나고 싶으신가요?" 
-               style="border-radius:24px;padding-right:50px;border:1px solid #36A756;width:100%;box-sizing:border-box">
-        <button id="send" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;padding:8px">
-          <img src="./assets/icons/kite.png" alt="send" style="width:24px;height:24px">
-        </button>
-      </div>
-    `;
-
-  // 채팅 전송 - 상황에 따라 다르게 처리
   $("#send").onclick = async () => {
-    const text = $("#chatInput").value.trim();
-    if (!text) return;
-    $("#chatInput").value = "";
+  const text = $("#chatInput").value.trim();
+  if (!text) return;
+  $("#chatInput").value = "";
 
-    // 타임테이블이 이미 생성된 상태라면 피드백으로 처리
-    if (STATE.chatStage === "table" && STATE.last_schedule) {
-      await handleScheduleFeedback(text);
-    } else {
-      // 새로운 추천 요청
-      await triggerRecommendation(text);
-    }
-  };
+  // 사용자 메시지는 여기서 단 한 번만 추가
+  $("#chat").insertAdjacentHTML("beforeend", `<div class="msg me">${text}</div>`);
+  scrollBottom();
+
+  if (STATE.chatStage === "table" && STATE.last_schedule) {
+    await handleScheduleFeedback(text);
+  } 
+  else {
+    // triggerRecommendation은 skipUserMessage = true로 호출
+    await triggerRecommendation(text, false);
+  }
+};
+
 
   // 홈에서 넘어온 쿼리가 있으면 자동 실행 (사용자 메시지는 이미 표시되어 있으므로 스킵)
   const homeQuery = localStorage.getItem("ims_home_query");
@@ -1876,3 +1981,23 @@ document.addEventListener("DOMContentLoaded", () => {
     navigator.serviceWorker.register("./service-worker.js");
   render();
 });
+
+(function(){
+  const resetBtn = document.querySelector('body > button.btn.ghost[onclick*="hardReset"]');
+  if (!resetBtn) return;
+
+  const scroller = document.querySelector('.app .container') || window;
+  let last = 0, ticking = false;
+
+  function onScroll(){
+    const cur = (scroller === window) ? window.scrollY : scroller.scrollTop;
+    const goingDown = cur > last;
+    last = cur;
+
+    if (goingDown && cur > 20) resetBtn.classList.add('is-hidden');   // 내려가면 숨김
+    else resetBtn.classList.remove('is-hidden');                      // 올라오면 표시
+    ticking = false;
+  }
+  function rafScroll(){ if (!ticking){ requestAnimationFrame(onScroll); ticking = true; } }
+  scroller.addEventListener('scroll', rafScroll, { passive: true });
+})();

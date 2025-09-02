@@ -1234,6 +1234,20 @@ class SimpleSchedulingService:
             schedule_text = self._format_itinerary_as_text(itinerary_data)
             bubble_schedule = self._format_bubble_friendly_schedule(itinerary_data, len(itinerary_data))
             
+            # 원본 일정에서 지역 정보 추출 (안전한 기본값)
+            region = original_schedule.get('region')
+            print(f"🔄 원본 일정 지역 사용: {region}")
+            
+            # 지역별 숙박/음식점 데이터 로드
+            accommodations = []
+            restaurants = []
+            if region:
+                regional_accommodations = self._load_regional_accommodations(region)
+                regional_restaurants = self._load_regional_restaurants(region)
+                accommodations = self._get_accommodation_cards(regional_accommodations, 5)
+                restaurants = self._get_restaurant_cards(regional_restaurants, 5)
+                print(f"🏨 피드백 반영 후 {region} 지역 숙박/음식점 데이터 로드: 숙박 {len(accommodations)}개, 음식점 {len(restaurants)}개")
+            
             return {
                 "status": "success",
                 "data": {
@@ -1243,6 +1257,9 @@ class SimpleSchedulingService:
                     "itinerary": itinerary_data,  # 기존 형태 (호환성 유지)
                     "schedule_text": schedule_text,
                     "bubble_schedule": bubble_schedule,  # Bubble 친화적 구조
+                    "accommodations": accommodations,
+                    "restaurants": restaurants,
+                    "region": region,
                     "changes_made": [f"'{feedback}' 피드백이 반영되었습니다."],
                     # Bubble 접근성 향상을 위한 추가 필드
                     "summary": {
